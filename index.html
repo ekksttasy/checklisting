@@ -18,6 +18,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 
 <style>
   :root{
@@ -290,21 +291,7 @@
 </div>
 
 <script>
-  // ============================================================
-  // FIREBASE CONFIG — replace with your own project's config.
-  // See SETUP.md for exact steps. Nothing will work until this
-  // is filled in with real values from your Firebase console.
-  // ============================================================
-  const FIREBASE_CONFIG = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID",
-  storageBucket: "YOUR_PROJECT.appspot.com",
-  messagingSenderId: "YOUR_SENDER_ID",
-  appId: "YOUR_APP_ID",
-  measurementId: "YOUR_MEASUREMENT_ID"
-  };
-
+  // Make sure that API key is set in firebase-config.js before running.
   const isConfigured = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
   if (!isConfigured) {
     document.getElementById('configWarning').classList.remove('hidden');
