@@ -1,0 +1,58 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() { return request.auth != null; }
+    function isGroupLeader(groupId) {
+      return get(/databases/$(database)/documents/groups/$(groupId)).data.leaderId == request.auth.uid;
+    }
+
+    // ---- users/{uid} : basic profile ----
+    match /users/{uid} {
+      // Readable by any signed-in staff member (needed to show leader/member
+      // names). Only the account owner can create/edit their own profile.
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == uid;
+      allow delete: if false;
+
+      // ---- users/{uid}/memberships/{groupId} : "groups I've joined" index ----
+      match /memberships/{groupId} {
+        allow read: if isSignedIn() && request.auth.uid == uid;
+        allow create, update: if isSignedIn() && request.auth.uid == uid;
+        // A member can remove their own membership (leave), and a group's
+        // leader can remove it too (kicking a member out).
+        allow delete: if isSignedIn() && (
+          request.auth.uid == uid || isGroupLeader(groupId)
+        );
+      }
+    }
+
+    // ---- groups/{groupId} ----
+    match /groups/{groupId} {
+      // Any signed-in staff member can read groups (needed to look a group
+      // up by join code before joining it).
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.resource.data.leaderId == request.auth.uid;
+      allow update, delete: if isSignedIn() && resource.data.leaderId == request.auth.uid;
+
+      // ---- groups/{groupId}/members/{uid} : roster ----
+      match /members/{uid} {
+        allow read: if isSignedIn();
+        // Someone can only add themselves as a member (no one can add
+        // another person on their behalf).
+        allow create: if isSignedIn() && request.auth.uid == uid;
+        // A member can remove themselves; the group's leader can remove
+        // anyone.
+        allow delete: if isSignedIn() && (
+          request.auth.uid == uid || isGroupLeader(groupId)
+        );
+        allow update: if false;
+      }
+
+      // Phase 3 will add /checklists here, and Phase 4 a /progress
+      // subcollection under each checklist. Re-paste this whole file
+      // once those rules are added — Firestore rules are all-or-nothing
+      // per deploy, not additive.
+    }
+  }
+}
