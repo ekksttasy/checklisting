@@ -22,7 +22,7 @@
 
 <style>
   :root{
-    --bg:#FAF7F2;
+    --bg:#fce0f1;
     --surface:#FFFFFF;
     --ink:#1F2A2E;
     --ink-soft:#5B6A6A;
@@ -62,6 +62,11 @@
   .brandmark{
     display:flex; flex-direction:column; align-items:center;
     gap:6px; margin-bottom:36px;
+    width:100%; max-width:380px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:28px 24px;
   }
   .brandmark .mark{
     width:52px; height:52px; border-radius:14px;
@@ -193,6 +198,95 @@
     border:1px solid var(--line); background:var(--bg);
     color:var(--danger); font-weight:650; font-size:14.5px; cursor:pointer;
   }
+
+  /* ---------- Groups view ---------- */
+  .groups-actions{ display:flex; gap:10px; margin-bottom:22px; }
+  .groups-actions .btn{ margin-top:0; padding:11px; font-size:14px; }
+
+  .groups-section{ margin-bottom:26px; }
+  .groups-section h3{
+    font-size:13px; text-transform:none; color:var(--ink-soft);
+    font-weight:650; margin-bottom:10px;
+  }
+  .group-list{ display:flex; flex-direction:column; gap:10px; }
+  .group-card{
+    background:var(--surface); border:1px solid var(--line);
+    border-radius:var(--radius); padding:14px 16px;
+    display:flex; align-items:center; justify-content:space-between;
+    cursor:pointer; text-align:left; width:100%;
+  }
+  .group-card .name{ font-size:15px; font-weight:650; margin-bottom:3px; }
+  .group-card .meta{ font-size:12.5px; color:var(--ink-soft); }
+  .role-badge{
+    font-size:11px; font-weight:650; padding:3px 9px; border-radius:99px;
+    white-space:nowrap; margin-left:10px;
+  }
+  .role-badge.leader{ background:#EAF0EC; color:var(--success); }
+  .role-badge.member{ background:#EFEAE0; color:var(--accent); }
+
+  .empty-state.small{ padding:22px 10px; }
+
+  /* ---------- Modal overlay ---------- */
+  .overlay{
+    position:fixed; inset:0; background:rgba(31,42,46,.42);
+    display:flex; align-items:flex-end; justify-content:center;
+    z-index:20;
+  }
+  .sheet{
+    background:var(--surface); width:100%; max-width:520px;
+    border-radius:16px 16px 0 0; padding:22px 20px calc(22px + env(safe-area-inset-bottom));
+  }
+  .sheet h3{ font-size:17px; margin-bottom:16px; }
+  .sheet-actions{ display:flex; gap:10px; margin-top:6px; }
+  .sheet-actions .btn{ margin-top:0; flex:1; width:auto; }
+
+  /* ---------- Group detail (full-screen panel) ---------- */
+  #groupDetail{
+    position:fixed; inset:0; background:var(--bg); z-index:15;
+    display:flex; flex-direction:column;
+  }
+  .detail-topbar{
+    display:flex; align-items:center; gap:12px;
+    padding:14px 18px; background:var(--surface);
+    border-bottom:1px solid var(--line);
+  }
+  .back-btn{
+    border:none; background:var(--bg); color:var(--primary-dark);
+    width:34px; height:34px; border-radius:9px; font-size:17px;
+    cursor:pointer; flex:0 0 auto;
+  }
+  .detail-topbar h3{ font-size:16.5px; flex:1; }
+  .detail-body{ flex:1; overflow-y:auto; padding:20px 18px 40px; max-width:520px; width:100%; margin:0 auto; }
+
+  .code-chip{
+    display:flex; align-items:center; justify-content:space-between;
+    background:var(--surface); border:1px dashed var(--line);
+    border-radius:var(--radius); padding:14px 16px; margin-bottom:22px;
+  }
+  .code-chip .label{ font-size:12px; color:var(--ink-soft); margin-bottom:3px; }
+  .code-chip .code{ font-size:21px; font-weight:700; letter-spacing:.06em; color:var(--primary-dark); }
+  .copy-btn{
+    border:1px solid var(--line); background:var(--bg); color:var(--primary-dark);
+    font-weight:650; font-size:13px; padding:8px 14px; border-radius:8px; cursor:pointer;
+  }
+
+  .member-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:12px 0; border-bottom:1px solid var(--line);
+  }
+  .member-row:last-child{ border-bottom:none; }
+  .member-row .name{ font-size:14.5px; font-weight:600; }
+  .member-row .you{ font-size:12px; color:var(--ink-soft); font-weight:500; }
+  .remove-btn{
+    border:none; background:none; color:var(--danger);
+    font-size:13px; font-weight:650; cursor:pointer; padding:6px 4px;
+  }
+  .leave-btn{
+    width:100%; margin-top:24px; padding:12px; border-radius:8px;
+    border:1px solid var(--line); background:var(--surface);
+    color:var(--danger); font-weight:650; font-size:14.5px; cursor:pointer;
+  }
+  .section-label{ font-size:13px; font-weight:650; color:var(--ink-soft); margin-bottom:10px; }
 </style>
 </head>
 <body>
@@ -262,11 +356,27 @@
   </div>
 
   <main>
-    <!-- Groups view (placeholder) -->
+    <!-- Groups view -->
     <section id="view-groups">
-      <div class="empty-state">
-        <h3>Groups are next</h3>
-        <p>Creating and joining groups lands in Phase 2.<br>Your account is fully working — start a new session to continue the build.</p>
+      <div class="groups-actions">
+        <button class="btn" onclick="openModal('create')">+ New group</button>
+        <button class="btn secondary" onclick="openModal('join')">Join a group</button>
+      </div>
+
+      <div class="groups-section">
+        <h3>Groups you lead</h3>
+        <div class="group-list" id="leadingList"></div>
+        <div class="empty-state small hidden" id="leadingEmpty">
+          <p>You're not leading any groups yet. Start one above.</p>
+        </div>
+      </div>
+
+      <div class="groups-section">
+        <h3>Groups you've joined</h3>
+        <div class="group-list" id="joinedList"></div>
+        <div class="empty-state small hidden" id="joinedEmpty">
+          <p>You haven't joined a group yet. Ask a leader for their join code.</p>
+        </div>
       </div>
     </section>
 
@@ -288,11 +398,96 @@
       <span class="dot">◐</span> Account
     </button>
   </div>
+
+<!-- Create group sheet -->
+  <div class="overlay hidden" id="createOverlay">
+    <div class="sheet">
+      <h3>Start a new group</h3>
+      <form onsubmit="return handleCreateGroup(event)">
+        <div class="field">
+          <label for="createGroupName">Group name</label>
+          <input id="createGroupName" type="text" placeholder="e.g. Front Desk — Weekday AM" required>
+        </div>
+        <div class="form-msg" id="createMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('create')">Cancel</button>
+          <button type="submit" class="btn" id="createBtn">Create group</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Join group sheet -->
+  <div class="overlay hidden" id="joinOverlay">
+    <div class="sheet">
+      <h3>Join a group</h3>
+      <form onsubmit="return handleJoinGroup(event)">
+        <div class="field">
+          <label for="joinCode">Join code</label>
+          <input id="joinCode" type="text" placeholder="e.g. 7QK4RX" style="text-transform:uppercase" required>
+        </div>
+        <div class="form-msg" id="joinMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('join')">Cancel</button>
+          <button type="submit" class="btn" id="joinBtn">Join</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
+  <!-- Rename group sheet -->
+  <div class="overlay hidden" id="renameOverlay">
+    <div class="sheet">
+      <h3>Rename group</h3>
+      <form onsubmit="return handleRenameGroup(event)">
+        <div class="field">
+          <label for="renameGroupName">Group name</label>
+          <input id="renameGroupName" type="text" required>
+        </div>
+        <div class="form-msg" id="renameMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('rename')">Cancel</button>
+          <button type="submit" class="btn" id="renameBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Group detail panel -->
+  <div id="groupDetail" class="hidden">
+    <div class="detail-topbar">
+      <button class="back-btn" onclick="closeGroupDetail()">←</button>
+      <h3 id="detailGroupName">Group</h3>
+      <button class="copy-btn hidden" id="renameIconBtn" onclick="openRenameSheet()">Rename</button>
+    </div>
+    <div class="detail-body">
+      <div id="detailLeaderBlock" class="hidden">
+        <div class="code-chip">
+          <div>
+            <div class="label">Join code — share with new members</div>
+            <div class="code" id="detailJoinCode">——————</div>
+          </div>
+          <button class="copy-btn" onclick="copyJoinCode()">Copy</button>
+        </div>
+      </div>
+
+      <div id="detailMemberBlock" class="hidden">
+        <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:20px;">Led by <strong id="detailLeaderName">—</strong></p>
+      </div>
+
+      <div class="section-label">Members</div>
+      <div id="detailMemberList"></div>
+      <div class="empty-state small hidden" id="detailMemberEmpty"><p>No members yet.</p></div>
+
+      <button class="leave-btn hidden" id="leaveBtn" onclick="handleLeaveGroup()">Leave group</button>
+      <button class="leave-btn hidden" id="deleteGroupBtn" onclick="handleDeleteGroup()">Delete group</button>
+    </div>
+  </div>
 </div>
 
 <script>
   // Make sure that API key is set in firebase-config.js before running.
-  const isConfigured = FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
+  const isConfigured = typeof FIREBASE_CONFIG !=='undefined' && FIREBASE_CONFIG.apiKey !== "YOUR_API_KEY";
   if (!isConfigured) {
     document.getElementById('configWarning').classList.remove('hidden');
   }
@@ -391,6 +586,304 @@
     document.getElementById('navAccount').classList.toggle('active', !isGroups);
   }
 
+    // ---------- Groups: state & listeners ----------
+  let currentUid = null;
+  let unsubLeading = null, unsubJoined = null, unsubMembers = null;
+  let openGroupId = null, openGroupRole = null;
+
+  function escapeHtml(s){
+    return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  async function ensureUserDoc(user){
+    try {
+      const ref = db.collection('users').doc(user.uid);
+      const snap = await ref.get();
+      if (!snap.exists) {
+        await ref.set({
+          name: user.displayName || user.email,
+          email: user.email,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+    } catch (err) {
+      console.error('ensureUserDoc failed', err);
+    }
+  }
+
+  function startGroupListeners(uid){
+    unsubLeading = db.collection('groups')
+      .where('leaderId', '==', uid).orderBy('createdAt', 'desc')
+      .onSnapshot(renderLeading, err => console.error('leading listener', err));
+
+    unsubJoined = db.collection('users').doc(uid).collection('memberships')
+      .orderBy('joinedAt', 'desc')
+      .onSnapshot(renderJoined, err => console.error('joined listener', err));
+  }
+
+  function stopGroupListeners(){
+    if (unsubLeading) unsubLeading();
+    if (unsubJoined) unsubJoined();
+    if (unsubMembers) unsubMembers();
+    unsubLeading = unsubJoined = unsubMembers = null;
+    document.getElementById('leadingList').innerHTML = '';
+    document.getElementById('joinedList').innerHTML = '';
+  }
+
+  function renderLeading(snap){
+    const list = document.getElementById('leadingList');
+    document.getElementById('leadingEmpty').classList.toggle('hidden', !snap.empty);
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const g = doc.data();
+      const card = document.createElement('button');
+      card.className = 'group-card';
+      card.innerHTML = '<div><div class="name"></div><div class="meta"></div></div><span class="role-badge leader">Leading</span>';
+      card.querySelector('.name').textContent = g.name || 'Untitled group';
+      card.querySelector('.meta').textContent = 'Join code: ' + (g.joinCode || '—');
+      card.onclick = () => openGroupDetail(doc.id, 'leader');
+      list.appendChild(card);
+    });
+  }
+
+  function renderJoined(snap){
+    const list = document.getElementById('joinedList');
+    document.getElementById('joinedEmpty').classList.toggle('hidden', !snap.empty);
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const m = doc.data();
+      const card = document.createElement('button');
+      card.className = 'group-card';
+      card.innerHTML = '<div><div class="name"></div><div class="meta">Member</div></div><span class="role-badge member">Joined</span>';
+      card.querySelector('.name').textContent = m.groupName || 'Untitled group';
+      card.onclick = () => openGroupDetail(doc.id, 'member');
+      list.appendChild(card);
+    });
+  }
+
+  // ---------- Group modals ----------
+  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName' };
+  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save' };
+
+  function openModal(which){
+    document.getElementById(which + 'Overlay').classList.remove('hidden');
+  }
+  function closeModal(which){
+    document.getElementById(which + 'Overlay').classList.add('hidden');
+    document.getElementById(MODAL_FIELDS[which]).value = '';
+    clearMsg(which + 'Msg');
+    const btn = document.getElementById(which + 'Btn');
+    btn.disabled = false;
+    btn.textContent = MODAL_DEFAULT_BTN_TEXT[which];
+  }
+
+  const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids mix-ups when read aloud
+  function generateJoinCode(){
+    let code = '';
+    for (let i = 0; i < 6; i++) code += CODE_CHARS[Math.floor(Math.random() * CODE_CHARS.length)];
+    return code;
+  }
+
+  async function handleCreateGroup(e){
+    e.preventDefault();
+    clearMsg('createMsg');
+    const name = document.getElementById('createGroupName').value.trim();
+    if (!name) return false;
+    const btn = document.getElementById('createBtn');
+    btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+      let code, exists = true, attempts = 0;
+      while (exists && attempts < 5) {
+        code = generateJoinCode();
+        const check = await db.collection('groups').where('joinCode', '==', code).limit(1).get();
+        exists = !check.empty;
+        attempts++;
+      }
+      await db.collection('groups').add({
+        name, leaderId: currentUid, joinCode: code,
+        createdAt: firebase.firestore.FieldValue.serverTimestamp()
+      });
+      closeModal('create');
+    } catch (err) {
+      showMsg('createMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Create group';
+    }
+    return false;
+  }
+
+  async function handleJoinGroup(e){
+    e.preventDefault();
+    clearMsg('joinMsg');
+    const code = document.getElementById('joinCode').value.trim().toUpperCase();
+    if (!code) return false;
+    const btn = document.getElementById('joinBtn');
+    btn.disabled = true; btn.textContent = 'Joining…';
+    try {
+      const q = await db.collection('groups').where('joinCode', '==', code).limit(1).get();
+      if (q.empty) {
+        showMsg('joinMsg', "No group has that code — double check with your leader.", 'error');
+        btn.disabled = false; btn.textContent = 'Join'; return false;
+      }
+      const groupDoc = q.docs[0];
+      const group = groupDoc.data();
+      if (group.leaderId === currentUid) {
+        showMsg('joinMsg', "You already lead this group.", 'error');
+        btn.disabled = false; btn.textContent = 'Join'; return false;
+      }
+      const existing = await db.collection('groups').doc(groupDoc.id).collection('members').doc(currentUid).get();
+      if (existing.exists) {
+        showMsg('joinMsg', "You're already in this group.", 'error');
+        btn.disabled = false; btn.textContent = 'Join'; return false;
+      }
+      const myName = auth.currentUser.displayName || auth.currentUser.email;
+      const now = firebase.firestore.FieldValue.serverTimestamp();
+      await db.collection('groups').doc(groupDoc.id).collection('members').doc(currentUid).set({
+        uid: currentUid, name: myName, joinedAt: now
+      });
+      await db.collection('users').doc(currentUid).collection('memberships').doc(groupDoc.id).set({
+        groupName: group.name, joinedAt: now
+      });
+      closeModal('join');
+    } catch (err) {
+      showMsg('joinMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Join';
+    }
+    return false;
+  }
+
+  // ---------- Group detail panel ----------
+  async function openGroupDetail(groupId, role){
+    openGroupId = groupId; openGroupRole = role;
+    document.getElementById('groupDetail').classList.remove('hidden');
+    document.getElementById('detailLeaderBlock').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('detailMemberBlock').classList.toggle('hidden', role !== 'member');
+    document.getElementById('leaveBtn').classList.toggle('hidden', role !== 'member');
+    document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
+
+    const groupSnap = await db.collection('groups').doc(groupId).get();
+    if (!groupSnap.exists) { closeGroupDetail(); return; }
+    const group = groupSnap.data();
+    document.getElementById('detailGroupName').textContent = group.name || 'Group';
+    document.getElementById('detailJoinCode').textContent = group.joinCode || '——————';
+
+    if (role === 'member') {
+      const leaderProfile = await db.collection('users').doc(group.leaderId).get();
+      document.getElementById('detailLeaderName').textContent =
+        (leaderProfile.exists && leaderProfile.data().name) || 'the group leader';
+    }
+
+    if (unsubMembers) unsubMembers();
+    unsubMembers = db.collection('groups').doc(groupId).collection('members')
+      .orderBy('joinedAt', 'asc')
+      .onSnapshot(snap => renderMemberList(snap, role), err => console.error('member listener', err));
+  }
+
+  function renderMemberList(snap, role){
+    const list = document.getElementById('detailMemberList');
+    document.getElementById('detailMemberEmpty').classList.toggle('hidden', !snap.empty);
+    list.innerHTML = '';
+    snap.forEach(doc => {
+      const m = doc.data();
+      const isMe = doc.id === currentUid;
+      const row = document.createElement('div');
+      row.className = 'member-row';
+      const nameSpan = document.createElement('span');
+      nameSpan.className = 'name';
+      nameSpan.textContent = (m.name || 'Team member') + (isMe ? ' ' : '');
+      if (isMe) {
+        const tag = document.createElement('span');
+        tag.className = 'you'; tag.textContent = '(you)';
+        nameSpan.appendChild(tag);
+      }
+      row.appendChild(nameSpan);
+      if (role === 'leader') {
+        const btn = document.createElement('button');
+        btn.className = 'remove-btn'; btn.textContent = 'Remove';
+        btn.onclick = () => handleRemoveMember(doc.id, m.name);
+        row.appendChild(btn);
+      }
+      list.appendChild(row);
+    });
+  }
+
+  function closeGroupDetail(){
+    document.getElementById('groupDetail').classList.add('hidden');
+    if (unsubMembers) { unsubMembers(); unsubMembers = null; }
+    openGroupId = null; openGroupRole = null;
+  }
+
+  async function copyJoinCode(){
+    const code = document.getElementById('detailJoinCode').textContent;
+    try { await navigator.clipboard.writeText(code); }
+    catch { prompt('Copy this join code:', code); }
+  }
+
+  async function handleLeaveGroup(){
+    if (!openGroupId) return;
+    if (!confirm('Leave this group? You can rejoin later with the join code.')) return;
+    await db.collection('groups').doc(openGroupId).collection('members').doc(currentUid).delete();
+    await db.collection('users').doc(currentUid).collection('memberships').doc(openGroupId).delete();
+    closeGroupDetail();
+  }
+
+  async function handleRemoveMember(uid, name){
+    if (!openGroupId) return;
+    if (!confirm('Remove ' + (name || 'this member') + ' from the group?')) return;
+    await db.collection('groups').doc(openGroupId).collection('members').doc(uid).delete();
+    await db.collection('users').doc(uid).collection('memberships').doc(openGroupId).delete();
+  }
+
+    function openRenameSheet(){
+    if (!openGroupId) return;
+    document.getElementById('renameGroupName').value = document.getElementById('detailGroupName').textContent;
+    openModal('rename');
+  }
+
+    async function handleRenameGroup(e){
+    e.preventDefault();
+    clearMsg('renameMsg');
+    const newName = document.getElementById('renameGroupName').value.trim();
+    if (!newName || !openGroupId) return false;
+    const gid = openGroupId;
+    const btn = document.getElementById('renameBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const membersSnap = await db.collection('group-list').doc(gid).collection('members').get();
+      const batch = db.batch();
+      batch.update(db.collection('group-list').doc(gid), { name: newName });
+      membersSnap.forEach(doc => {
+        batch.update(db.collection('users').doc(doc.id).collection('memberships').doc(gid), { groupName: newName });
+      });
+      await batch.commit();
+      document.getElementById('detailGroupName').textContent = newName;
+      closeModal('rename');
+    } catch (err) {
+      showMsg('renameMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+    return false;
+  }
+
+    async function handleDeleteGroup(){
+    if (!openGroupId) return;
+    if (!confirm('Delete this group? This removes it for every member and can\'t be undone.')) return;
+    const gid = openGroupId;
+    try {
+      const membersSnap = await db.collection('group-list').doc(gid).collection('members').get();
+      const batch = db.batch();
+      membersSnap.forEach(doc => {
+        batch.delete(db.collection('group-list').doc(gid).collection('members').doc(doc.id));
+        batch.delete(db.collection('users').doc(doc.id).collection('memberships').doc(gid));
+      });
+      batch.delete(db.collection('group-list').doc(gid));
+      await batch.commit();
+      closeGroupDetail();
+    } catch (err) {
+      alert('Could not delete group: ' + err.message);
+    }
+  }
+
   // ---------- Auth state ----------
   if (isConfigured) {
     auth.onAuthStateChanged(async (user) => {
@@ -407,9 +900,17 @@
         document.getElementById('loginBtn').textContent = 'Log in';
         document.getElementById('signupBtn').disabled = false;
         document.getElementById('signupBtn').textContent = 'Create account';
+        currentUid = user.uid;
+        startGroupListeners(currentUid);
       } else {
         appScreen.classList.add('hidden');
         authScreen.classList.remove('hidden');
+        closeGroupDetail();
+        closeModal('create');
+        closeModal('join');
+        closeModal('rename');
+        stopGroupListeners();
+        currentUid = null;
       }
     });
   }

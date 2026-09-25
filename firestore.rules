@@ -18,9 +18,16 @@ service cloud.firestore {
       // ---- users/{uid}/memberships/{groupId} : "groups I've joined" index ----
       match /memberships/{groupId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
-        allow create, update: if isSignedIn() && request.auth.uid == uid;
+        allow create: if isSignedIn() && request.auth.uid == uid;
+        // A member can update their own membership doc; a group's leader
+        // can also update it — needed so renaming a group can cascade the
+        // new name onto every member's copy.
+        allow update: if isSignedIn() && (
+          request.auth.uid == uid || isGroupLeader(groupId)
+        );
         // A member can remove their own membership (leave), and a group's
-        // leader can remove it too (kicking a member out).
+        // leader can remove it too (kicking a member out, or deleting the
+        // whole group).
         allow delete: if isSignedIn() && (
           request.auth.uid == uid || isGroupLeader(groupId)
         );
@@ -48,11 +55,6 @@ service cloud.firestore {
         );
         allow update: if false;
       }
-
-      // Phase 3 will add /checklists here, and Phase 4 a /progress
-      // subcollection under each checklist. Re-paste this whole file
-      // once those rules are added — Firestore rules are all-or-nothing
-      // per deploy, not additive.
     }
   }
 }
