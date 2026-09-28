@@ -848,18 +848,25 @@
     const gid = openGroupId;
     const btn = document.getElementById('renameBtn');
     btn.disabled = true; btn.textContent = 'Saving…';
+    let step = 'reading members';
     try {
-      const membersSnap = await db.collection('group-list').doc(gid).collection('members').get();
-      const batch = db.batch();
-      batch.update(db.collection('group-list').doc(gid), { name: newName });
-      membersSnap.forEach(doc => {
-        batch.update(db.collection('users').doc(doc.id).collection('memberships').doc(gid), { groupName: newName });
-      });
-      await batch.commit();
+      const membersSnap = await db.collection('groups').doc(gid).collection('members').get();
+      step = 'updating groups/' + gid;
+      await db.collection('groups').doc(gid).update({ name: newName });
+      for (const doc of membersSnap.docs) {
+        step = 'updating users/' +doc .id + '/memberships/' + gid;
+        try{
+          await db.collection('users').doc(doc.id).collection('memberships').doc(gid).update({ groupName: newName });
+        } catch (innerErr) {
+          // a member with no mirroed doc has nothing to update - skips instead of failing
+          if (innerErr.code !== 'not-found') throw innerErr;
+        }
+      }
       document.getElementById('detailGroupName').textContent = newName;
       closeModal('rename');
     } catch (err) {
-      showMsg('renameMsg', err.message, 'error');
+      console.error('Rename failed while ' + step, err);
+      showMsg('renameMsg', 'Failed while' + step + ': ' +err.message, 'error');
       btn.disabled = false; btn.textContent = 'Save';
     }
     return false;
@@ -869,17 +876,20 @@
     if (!openGroupId) return;
     if (!confirm('Delete this group? This removes it for every member and can\'t be undone.')) return;
     const gid = openGroupId;
+    let step = 'reading members';
     try {
-      const membersSnap = await db.collection('group-list').doc(gid).collection('members').get();
-      const batch = db.batch();
-      membersSnap.forEach(doc => {
-        batch.delete(db.collection('group-list').doc(gid).collection('members').doc(doc.id));
-        batch.delete(db.collection('users').doc(doc.id).collection('memberships').doc(gid));
-      });
-      batch.delete(db.collection('group-list').doc(gid));
-      await batch.commit();
+      const membersSnap = await db.collection('groups').doc(gid).collection('members').get();
+      for (const doc of membersSnap.docs) {
+        step = 'deleting users/' + doc.id + '/memberships/' + gid;
+        await db.collection('users').doc(doc.id).collection('memberships').doc(gid).delete();
+        step = 'deleting groups/' + gid + '/members/' + doc.id;
+        await db.collection('groups').doc(gid).collection('members').doc(doc.id).delete();
+      }
+      step = 'deleting groups/' + gid;
+      await db.collection('groups').doc(gid).delete();
       closeGroupDetail();
     } catch (err) {
+      console.error('Delete failed while ' + step, err);
       alert('Could not delete group: ' + err.message);
     }
   }
