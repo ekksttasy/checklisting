@@ -7,9 +7,13 @@ service cloud.firestore {
       return get(/databases/$(database)/documents/groups/$(groupId)).data.leaderId == request.auth.uid;
     }
 
+    function isGroupMember(groupId) {
+      return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
+    }
+
     // ---- users/{uid} : basic profile ----
     match /users/{uid} {
-      // Readable by any signed-in staff member (needed to show leader/member
+      // Readable by any signed-in group member (needed to show leader/member
       // names). Only the account owner can create/edit their own profile.
       allow read: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == uid;
@@ -19,8 +23,8 @@ service cloud.firestore {
       match /memberships/{groupId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
         allow create: if isSignedIn() && request.auth.uid == uid;
-        // A member can update their own membership doc; a group's leader
-        // can also update it — needed so renaming a group can cascade the
+        // a member can update their own membership doc & a group's leader
+        // can also update it. ensures renaming a group can cascade the
         // new name onto every member's copy.
         allow update: if isSignedIn() && (
           request.auth.uid == uid || isGroupLeader(groupId)
@@ -36,7 +40,7 @@ service cloud.firestore {
 
     // ---- groups/{groupId} ----
     match /groups/{groupId} {
-      // Any signed-in staff member can read groups (needed to look a group
+      // Any signed-in group member can read groups (needed to look a group
       // up by join code before joining it).
       allow read: if isSignedIn();
       allow create: if isSignedIn() && request.resource.data.leaderId == request.auth.uid;
@@ -48,12 +52,18 @@ service cloud.firestore {
         // Someone can only add themselves as a member (no one can add
         // another person on their behalf).
         allow create: if isSignedIn() && request.auth.uid == uid;
-        // A member can remove themselves; the group's leader can remove
-        // anyone.
+        // A member can remove themselves; the group's leader can remove anyone.
         allow delete: if isSignedIn() && (
           request.auth.uid == uid || isGroupLeader(groupId)
         );
         allow update: if false;
+      }
+
+      // ---- grous/{groupId}/checklists{checklistId} ----
+      // The leader creates/edits/archives, & leader & all members can read.
+      match /checklists/{checklistId} {
+        allow read: if isSignedIn() && (isGroupLeader(groupId) || isGroupMember(groupId));
+        allow create, update, delete: if isSignedIn() && isGroupLeader(groupId);
       }
     }
   }

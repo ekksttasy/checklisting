@@ -287,6 +287,34 @@
     color:var(--danger); font-weight:650; font-size:14.5px; cursor:pointer;
   }
   .section-label{ font-size:13px; font-weight:650; color:var(--ink-soft); margin-bottom:10px; }
+
+  /* ---------- Checklists ---------- */
+  .sheet.tall{ max-height:90vh; overflow-y:auto; }
+  .checklists-block{ margin-bottom:26px; }
+  .checklists-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+  .checklists-head .section-label{ margin-bottom:0; }
+  .checklist-card{
+    display:flex; align-items: center; background:var(--surface);
+    border:1px solid var(--line); border-radius:var(--radius); margin-bottom:10px;
+  }
+  .checklist-card.archived{ opacity:.65; }
+  .checklist-title{
+    flex:1; border:none; background:none; text-align:left; cursor:pointer;
+    padding:14px 16px; font-family:inherit; color:inherit;
+  }
+  .checklist-title .name{ font-size:15px; font-weight:650; margin-bottom:3px; }
+  .checklist-title .meta{ font-size:12.5px; color:var(--ink-soft); }
+  .checklist-card .copy-btn{ margin-right:12px }
+  .item-row{ display:flex; gap:8px; margin-bottom:8px; align-items:center; }
+  .item-row input{
+    flex:1; min-width:0; padding:10px 12px; font-size:15px; font-family:inherit;
+    border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink);
+  }
+.item-row input:focus{ outline:2px solid var(--primary); outline-offset:1px; background:var(--surface); }
+.link-btn{
+  border:none; background:none; color:var(--primary-dark); font-weight:650;
+  font-size:13px; cursor:pointer; padding:8px 0px;
+}
 </style>
 </head>
 <body>
@@ -453,6 +481,28 @@
     </div>
   </div>
 
+  
+  <!-- Checklist editor / viewer sheet -->
+  <div class = "overlay hidden" id="checklistOverlay">
+    <div class="sheet tall">
+      <h3 id="checklistSheetTitle">New checklist</h3>
+      <form onsubmit="return handleSaveChecklist(event)">
+        <div class="field">
+          <label for="checklistTitle">Title</label>
+          <input id="checklistTitle" type="text" placeholder="e.g. Opening tasks" required>
+        </div>
+        <div class="section-label">Items</div>
+        <div id="checklistItems"></div>
+        <button type="button" class ="btn secondary" id="addItemBtn" style="margin-bottom:14px" onclick="addChecklistItem()">+ Add item</button>
+        <div class="form-msg" id="checklistMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" id="checklistCancelBtn" onclick="closeModal('checklist')">Cancel</button>
+          <button type="submit" class="btn" id="checklistBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Group detail panel -->
   <div id="groupDetail" class="hidden">
     <div class="detail-topbar">
@@ -473,6 +523,16 @@
 
       <div id="detailMemberBlock" class="hidden">
         <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:20px;">Led by <strong id="detailLeaderName">—</strong></p>
+      </div>
+
+      <div class="checklists-block">
+        <div class="checklists-head">
+          <div class="section-label">Checklists</div>
+          <button class="copy-btn hidden" id="newChecklistBtn" onclick="openChecklistSheet(null)">+ New</button>
+        </div>
+        <div id="detailChecklistList"></div>
+        <div class="empty-state small hidden" id="detailChecklistEmpty"><p id="detailChecklistEmptyText"></p></div>
+        <button class="link-btn hidden" id="archivedToggle" onclick="toggleShowArchived()"></button>
       </div>
 
       <div class="section-label">Members</div>
@@ -500,7 +560,7 @@
   }
 
   // ---------- Auth tab switching ----------
-  function switchAuthTab(which){
+  function switchAuthTab(which) {
     const isLogin = which === 'login';
     document.getElementById('tabLogin').classList.toggle('active', isLogin);
     document.getElementById('tabSignup').classList.toggle('active', !isLogin);
@@ -508,7 +568,7 @@
     document.getElementById('signupForm').classList.toggle('hidden', isLogin);
   }
 
-  function showMsg(id, text, type){
+  function showMsg(id, text, type) {
     const el = document.getElementById(id);
     el.textContent = text;
     el.className = 'form-msg show ' + type;
@@ -519,7 +579,7 @@
   }
 
   // ---------- Sign up ----------
-  async function handleSignup(e){
+  async function handleSignup(e) {
     e.preventDefault();
     if (!isConfigured) { showMsg('signupMsg', 'Connect Firebase first — see SETUP.md.', 'error'); return false; }
     clearMsg('signupMsg');
@@ -543,7 +603,7 @@
   }
 
   // ---------- Log in ----------
-  async function handleLogin(e){
+  async function handleLogin(e) {
     e.preventDefault();
     if (!isConfigured) { showMsg('loginMsg', 'Connect Firebase first — see SETUP.md.', 'error'); return false; }
     clearMsg('loginMsg');
@@ -560,11 +620,11 @@
     return false;
   }
 
-  function handleLogout(){
+  function handleLogout() {
     auth.signOut();
   }
 
-  function friendlyAuthError(err){
+  function friendlyAuthError(err) {
     const map = {
       'auth/email-already-in-use': 'That email already has an account — try logging in instead.',
       'auth/invalid-email': 'That email address doesn\'t look right.',
@@ -578,7 +638,7 @@
   }
 
   // ---------- View switching (Groups / Account) ----------
-  function switchView(which){
+  function switchView(which) {
     const isGroups = which === 'groups';
     document.getElementById('view-groups').classList.toggle('hidden', !isGroups);
     document.getElementById('view-account').classList.toggle('hidden', isGroups);
@@ -595,7 +655,7 @@
     return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  async function ensureUserDoc(user){
+  async function ensureUserDoc(user) {
     try {
       const ref = db.collection('users').doc(user.uid);
       const snap = await ref.get();
@@ -611,7 +671,7 @@
     }
   }
 
-  function startGroupListeners(uid){
+  function startGroupListeners(uid) {
     unsubLeading = db.collection('groups')
       .where('leaderId', '==', uid).orderBy('createdAt', 'desc')
       .onSnapshot(renderLeading, err => console.error('leading listener', err));
@@ -621,7 +681,7 @@
       .onSnapshot(renderJoined, err => console.error('joined listener', err));
   }
 
-  function stopGroupListeners(){
+  function stopGroupListeners() {
     if (unsubLeading) unsubLeading();
     if (unsubJoined) unsubJoined();
     if (unsubMembers) unsubMembers();
@@ -630,7 +690,7 @@
     document.getElementById('joinedList').innerHTML = '';
   }
 
-  function renderLeading(snap){
+  function renderLeading(snap) {
     const list = document.getElementById('leadingList');
     document.getElementById('leadingEmpty').classList.toggle('hidden', !snap.empty);
     list.innerHTML = '';
@@ -646,7 +706,7 @@
     });
   }
 
-  function renderJoined(snap){
+  function renderJoined(snap) {
     const list = document.getElementById('joinedList');
     document.getElementById('joinedEmpty').classList.toggle('hidden', !snap.empty);
     list.innerHTML = '';
@@ -662,10 +722,10 @@
   }
 
   // ---------- Group modals ----------
-  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName' };
-  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save' };
+  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName', checklist: 'checklistTitle' };
+  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save', checklist: 'Save' };
 
-  function openModal(which){
+  function openModal(which) {
     document.getElementById(which + 'Overlay').classList.remove('hidden');
   }
   function closeModal(which){
@@ -675,6 +735,7 @@
     const btn = document.getElementById(which + 'Btn');
     btn.disabled = false;
     btn.textContent = MODAL_DEFAULT_BTN_TEXT[which];
+    if (which === 'checklist') { editingChecklistId = null; editorItems = []; }
   }
 
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids mix-ups when read aloud
@@ -684,7 +745,7 @@
     return code;
   }
 
-  async function handleCreateGroup(e){
+  async function handleCreateGroup(e) {
     e.preventDefault();
     clearMsg('createMsg');
     const name = document.getElementById('createGroupName').value.trim();
@@ -711,7 +772,7 @@
     return false;
   }
 
-  async function handleJoinGroup(e){
+  async function handleJoinGroup(e) {
     e.preventDefault();
     clearMsg('joinMsg');
     const code = document.getElementById('joinCode').value.trim().toUpperCase();
@@ -752,7 +813,7 @@
   }
 
   // ---------- Group detail panel ----------
-  async function openGroupDetail(groupId, role){
+  async function openGroupDetail(groupId, role) {
     openGroupId = groupId; openGroupRole = role;
     document.getElementById('groupDetail').classList.remove('hidden');
     document.getElementById('detailLeaderBlock').classList.toggle('hidden', role !== 'leader');
@@ -760,6 +821,8 @@
     document.getElementById('leaveBtn').classList.toggle('hidden', role !== 'member');
     document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
     document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('newChecklistBtn').classList.toggle('hidden', role !== 'leader');
+    showArchived = false; currentChecklists = []; renderChecklists();
 
     const groupSnap = await db.collection('groups').doc(groupId).get();
     if (!groupSnap.exists) { closeGroupDetail(); return; }
@@ -777,9 +840,11 @@
     unsubMembers = db.collection('groups').doc(groupId).collection('members')
       .orderBy('joinedAt', 'asc')
       .onSnapshot(snap => renderMemberList(snap, role), err => console.error('member listener', err));
+
+    startChecklistListener(groupId);  
   }
 
-  function renderMemberList(snap, role){
+  function renderMemberList(snap, role) {
     const list = document.getElementById('detailMemberList');
     document.getElementById('detailMemberEmpty').classList.toggle('hidden', !snap.empty);
     list.innerHTML = '';
@@ -807,19 +872,20 @@
     });
   }
 
-  function closeGroupDetail(){
+  function closeGroupDetail() {
     document.getElementById('groupDetail').classList.add('hidden');
     if (unsubMembers) { unsubMembers(); unsubMembers = null; }
+    if (unsubChecklists) { unsubChecklists(); unsubChecklists = null; }
     openGroupId = null; openGroupRole = null;
   }
 
-  async function copyJoinCode(){
+  async function copyJoinCode() {
     const code = document.getElementById('detailJoinCode').textContent;
     try { await navigator.clipboard.writeText(code); }
     catch { prompt('Copy this join code:', code); }
   }
 
-  async function handleLeaveGroup(){
+  async function handleLeaveGroup() {
     if (!openGroupId) return;
     if (!confirm('Leave this group? You can rejoin later with the join code.')) return;
     await db.collection('groups').doc(openGroupId).collection('members').doc(currentUid).delete();
@@ -827,20 +893,20 @@
     closeGroupDetail();
   }
 
-  async function handleRemoveMember(uid, name){
+  async function handleRemoveMember(uid, name) {
     if (!openGroupId) return;
     if (!confirm('Remove ' + (name || 'this member') + ' from the group?')) return;
     await db.collection('groups').doc(openGroupId).collection('members').doc(uid).delete();
     await db.collection('users').doc(uid).collection('memberships').doc(openGroupId).delete();
   }
 
-    function openRenameSheet(){
+    function openRenameSheet() {
     if (!openGroupId) return;
     document.getElementById('renameGroupName').value = document.getElementById('detailGroupName').textContent;
     openModal('rename');
   }
 
-    async function handleRenameGroup(e){
+  async function handleRenameGroup(e) {
     e.preventDefault();
     clearMsg('renameMsg');
     const newName = document.getElementById('renameGroupName').value.trim();
@@ -872,7 +938,153 @@
     return false;
   }
 
-    async function handleDeleteGroup(){
+  // ---------- Checklists ----------
+  let unsubChecklists = null;
+  let currentChecklists = [];
+  let showArchived = false;
+  let editingChecklistId = null;
+  let editorItems = [];
+  let editorReadOnly = false;
+
+  function newItemId(){ return 'i' + Math.random().toString(36).slice(2, 9); }
+
+  function startChecklistListener(groupId) {
+    if (unsubChecklists) unsubChecklists();
+    unsubChecklists = db.collection('groups').doc(groupId).collection('checklists')
+      .orderBy('createdAt', 'desc')
+      .onSnapshot(snap => {
+        currentChecklists = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+        renderChecklists();
+      }, err => console.error('checklist listener', err));
+  }
+
+  function renderChecklists() {
+    const isLeader = openGroupRole === 'leader';
+    const list = document.getElementById('detailChecklistList');
+    const archivedCount = currentChecklists.filter(c => c.archived).length;
+    const shown = (isLeader && showArchived) ? currentChecklists : currentChecklists.filter(c => !c.archived);
+    list.innerHTML = '';
+    document.getElementById('detailChecklistEmpty').classList.toggle('hidden', shown.length > 0);
+    document.getElementById('detailChecklistEmptyText').textContent = isLeader
+      ? 'No checklists yet. Tap + New to create one.'
+      : "Your leader hasn't set a checklist yet.";
+    shown.forEach(c => {
+      const card = document.createElement('div');
+      card.className = 'checklist-card' + (c.archived ? ' archived' : '');
+      const main = document.createElement('button');
+      main.className= 'checklist-title';
+      main.innerHTML = '<div class="name"></div><div class="meta"></div>';
+      main.querySelector('.name').textContent = c.title || 'Untitled checklist';
+      const n = (c.items || []).length;
+      main.querySelector('.meta').textContent = n + (n === 1 ? ' item' : ' items') + (c.archived ? ' · Archived' : '');
+      main.onclick = () => openChecklistSheet(c.id);
+      card.appendChild(main);
+      if (isLeader) {
+        const btn = document.createElement('button');
+        btn.className = 'copy-btn';
+        btn.textContent = c.archived ? 'Unarchive' : 'Archive';
+        btn.onclick = () => toggleArchive(c);
+        card.appendChild(btn);
+      }
+      list.appendChild(card);
+    });
+    const toggle = document.getElementById('archivedToggle');
+    toggle.classList.toggle('hidden', !(isLeader && archivedCount > 0));
+    toggle.textContent = showArchived ? 'Hide archived' : 'Show archived (' + archivedCount + ')';
+  }
+
+  function toggleShowArchived() { showArchived = !showArchived; renderChecklists(); }
+
+  async function toggleArchive(c) {
+    if (!openGroupId) return;
+    try {
+      await db.collection('groups').doc(openGroupId).collection('checklists').doc(c.id).update({ archived: !c.archived });
+    } catch (err) {
+      console.error('Archive toggle failed', err);
+      alert('Could not update checklist: ' + err.message);
+    }
+  }
+
+  function openChecklistSheet(id) {
+    editorReadOnly = openGroupRole !== 'leader';
+    editingChecklistId = id;
+    const c = id ? currentChecklists.find(x => x.id === id) : null;
+    editorItems = c ? (c.items || []).map(i => ({ id: i.id, text: i.text})) : [{ id: newItemId(), text: '' }];
+    const title = document.getElementById('checklistTitle');
+    title.value = c ? (c.title || '') : '';
+    title.readOnly = editorReadOnly;
+    document.getElementById('checklistSheetTitle').textContent = editorReadOnly ? 'Checklist' : (c ? 'Edit checklist' : 'New checklist');
+    document.getElementById('addItemBtn').classList.toggle('hidden', editorReadOnly);
+    document.getElementById('checklistBtn').classList.toggle('hidden', editorReadOnly);
+    document.getElementById('checklistCancelBtn').textContent = editorReadOnly ? 'Close' : 'Cancel';
+    renderEditorItems();
+    openModal('checklist');
+  }
+
+  function renderEditorItems(focusLast) {
+    const wrap = document.getElementById('checklistItems');
+    wrap.innerHTML = '';
+    editorItems.forEach((item, idx) => {
+      const row = document.createElement('div');
+      row.className = 'item-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = item.text;
+      input.placeholder = 'Task ' + (idx + 1);
+      input.readOnly = editorReadOnly;
+      input.oninput = () => { item.text = input.value; };
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); if (!editorReadOnly) addChecklistItem(); }
+      };
+      row.appendChild(input);
+      if (!editorReadOnly) {
+        const rm = document.createElement('button');
+        rm.type = 'button';
+        rm.className = 'remove-btn';
+        rm.textContent = 'Remove';
+        rm.onclick = () => { editorItems.splice(idx, 1); renderEditorItems(); };
+        row.appendChild(rm);
+      }
+      wrap.appendChild(row);
+      if (focusLast && idx === editorItems.length - 1) input.focus();
+    });
+  }
+
+  function addChecklistItem() {
+    editorItems.push({ id: newItemId(), text: '' });
+    renderEditorItems(true);
+  }
+
+  async function handleSaveChecklist(e) {
+    e.preventDefault();
+    if (editorReadOnly || !openGroupId) return false;
+    clearMsg('checklistMsg');
+    const title = document.getElementById('checklistTitle').value.trim();
+    const items = editorItems.map(i => ({ id: i.id, text: i.text.trim() })).filter(i => i.text);
+    if (!title) return false;
+    if (!items.length) { showMsg('checklistMsg', 'Add at least one item.', 'error'); return false; }
+    const btn = document.getElementById( 'checklistBtn');
+    btn.disabled = true; btn.textContent = 'Saving...';
+    try {
+      const col = db.collection('groups').doc(openGroupId).collection('checklists');
+      if (editingChecklistId) {
+        await col.doc(editingChecklistId).update({ title, items });
+      } else {
+        await col.add({
+          title, items, archived: false, createdBy: currentUid,
+          createdAt: firebase.firestore.FieldValue.serverTimestamp()
+        });
+      }
+      closeModal('checklist');
+    } catch (err) {
+      console.error('Save checklist failed', err);
+      showMsg('checklistMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+    return false;
+  }
+
+  async function handleDeleteGroup() {
     if (!openGroupId) return;
     if (!confirm('Delete this group? This removes it for every member and can\'t be undone.')) return;
     const gid = openGroupId;
@@ -885,12 +1097,18 @@
         step = 'deleting groups/' + gid + '/members/' + doc.id;
         await db.collection('groups').doc(gid).collection('members').doc(doc.id).delete();
       }
+      step = 'reading checklists';
+      const checklistsSnap = await db.collection('groups').doc(gid).collection('checklists').get();
+      for (const doc of checklistsSnap.docs) {
+        step = 'deleting groups/' + gid + '/checklists/' + doc.id;
+        await doc.ref.delete();
+      }
       step = 'deleting groups/' + gid;
       await db.collection('groups').doc(gid).delete();
       closeGroupDetail();
     } catch (err) {
       console.error('Delete failed while ' + step, err);
-      alert('Could not delete group: ' + err.message);
+      alert('Could not delete group while ' + step + ':\n' + err.message);
     }
   }
 
@@ -911,6 +1129,7 @@
         document.getElementById('signupBtn').disabled = false;
         document.getElementById('signupBtn').textContent = 'Create account';
         currentUid = user.uid;
+        ensureUserDoc(user);
         startGroupListeners(currentUid);
       } else {
         appScreen.classList.add('hidden');
@@ -919,6 +1138,7 @@
         closeModal('create');
         closeModal('join');
         closeModal('rename');
+        closeModal('checklist');
         stopGroupListeners();
         currentUid = null;
       }
