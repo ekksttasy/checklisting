@@ -517,6 +517,7 @@
             <div class="code" id="detailJoinCode">——————</div>
           </div>
           <button class="copy-btn" onclick="copyJoinCode()">Copy</button>
+          <button class="copy-btn" id="rerollCodeBtn" onclick="handleRerollCode()" >New Code</button>
         </div>
       </div>
 
@@ -882,6 +883,26 @@
     const code = document.getElementById('detailJoinCode').textContent;
     try { await navigator.clipboard.writeText(code); }
     catch { prompt('Copy this join code:', code); }
+  }
+
+  async function handleRerollCode() {
+    if (!openGroupId) return;
+    if (!confirm('Generate a new join code? Anyone with the old code will no longer be able to join.')) return;
+    const btn = document.getElementById('rerollCodeBtn');
+    btn.disabled = true; btn.textContent = 'Generating…';
+    try {
+      let code, exists = true, attempts = 0;
+      while (exists && attempts < 5) {
+        code = generateJoinCode();
+        const check = await db.collection('groups').where('joinCode', '==', code).limit(1).get();
+        exists = !check.empty;
+      }
+      await db.collection('groups').doc(openGroupId).update({ joinCode: code });
+      document.getElementById('detailJoinCode').textContent = code;
+    } catch (err) {
+      alert('Could not generate a new code: ' + err.message);
+    }
+    btn.disabled = false; btn.textContent = 'New Code';
   }
 
   async function handleLeaveGroup() {
