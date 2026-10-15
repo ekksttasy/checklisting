@@ -276,6 +276,19 @@
   .member-row:last-child{ border-bottom:none; }
   .member-row .name{ font-size:14.5px; font-weight:600; }
   .member-row .you{ font-size:12px; color:var(--ink-soft); font-weight:500; }
+  .progress-row{ padding:10px 0; border-bottom:1px solid var(--line); }
+  .progress-row:last-child{ border-bottom:none; }
+  .progress-row .top-line{ display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:6px; }
+  .progress-row .top-line .pname{ font-weight:600; }
+  .progress-row .top-line .pcount{ color:var(--ink-soft); }
+  .progress-row .bar-track{ height:6px; border-radius:99px; background:var(--bg); overflow:hidden; }
+  .progress-row .bar-fill{ height:100%; background:var(--primary); border-radius:99px; }
+
+  .item-row.checkable{ cursor:pointer; }
+  .item-row.checkable input[type="checkbox"]{ width:19px; height:19px; flex:0 0 auto; accent-color:var(--primary); }
+  .item-row.checkable .item-text{ flex:1; font-size:14.5px; }
+  .item-row.checkable .item-text.done{ color:var(--ink-soft); text-decoration:line-through; }
+
   .remove-btn{
     border:none; background:none; color:var(--danger);
     font-size:13px; font-weight:650; cursor:pointer; padding:6px 4px;
@@ -490,9 +503,24 @@
           <label for="checklistTitle">Title</label>
           <input id="checklistTitle" type="text" placeholder="e.g. Opening tasks" required>
         </div>
+        <div id="checklistSummary" class="hidden" style="margin-bottom:16px;">
+          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">
+            <span id="checklistSummaryText">0 of 0 done</span>
+          </div>
+          <div style="height:8px;border-radius:99px;background:var(--bg);overflow:hidden;">
+            <div id="checklistSummaryBar" style="height:100%;width:0%;background:var(--accent);border-radius:99px;transition:width .15s;"></div>
+          </div>
+        </div>
+        
         <div class="section-label">Items</div>
         <div id="checklistItems"></div>
         <button type="button" class ="btn secondary" id="addItemBtn" style="margin-bottom:14px" onclick="addChecklistItem()">+ Add item</button>
+        
+        <div id="checklistProgressBlock" class="hidden">
+          <div class="section-label">Team progress</div>
+          <div id="checklistProgressList" style="margin-bottom:14px;"></div>
+        </div>
+        
         <div class="form-msg" id="checklistMsg"></div>
         <div class="sheet-actions">
           <button type="button" class="btn secondary" id="checklistCancelBtn" onclick="closeModal('checklist')">Cancel</button>
@@ -516,8 +544,10 @@
             <div class="label">Join code — share with new members</div>
             <div class="code" id="detailJoinCode">——————</div>
           </div>
-          <button class="copy-btn" onclick="copyJoinCode()">Copy</button>
-          <button class="copy-btn" id="rerollCodeBtn" onclick="handleRerollCode()" >New Code</button>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end;">
+            <button class="copy-btn" onclick="copyJoinCode()">Copy</button>
+            <button class="copy-btn" id="rerollCodeBtn" onclick="handleRerollCode()">New Code</button>
+          </div>
         </div>
       </div>
 
@@ -735,7 +765,11 @@
     const btn = document.getElementById(which + 'Btn');
     btn.disabled = false;
     btn.textContent = MODAL_DEFAULT_BTN_TEXT[which];
-    if (which === 'checklist') { editingChecklistId = null; editorItems = []; }
+    if (which === 'checklist') { 
+      editingChecklistId = null; editorItems = []; memberOwnChecked = [];
+      if (unsubProgress) { unsubProgress(); unsubProgress = null; }
+      renderChecklists();
+    }
   }
 
   const CODE_CHARS = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no 0/O/1/I — avoids mix-ups when read aloud
@@ -845,6 +879,7 @@
   }
 
   function renderMemberList(snap, role) {
+    currentMembers = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
     const list = document.getElementById('detailMemberList');
     document.getElementById('detailMemberEmpty').classList.toggle('hidden', !snap.empty);
     list.innerHTML = '';
@@ -876,6 +911,8 @@
     document.getElementById('groupDetail').classList.add('hidden');
     if (unsubMembers) { unsubMembers(); unsubMembers = null; }
     if (unsubChecklists) { unsubChecklists(); unsubChecklists = null; }
+    if (unsubProgress) { unsubProgress(); unsubProgress = null; }
+    currentMembers = [];
     openGroupId = null; openGroupRole = null;
   }
 
@@ -896,6 +933,7 @@
         code = generateJoinCode();
         const check = await db.collection('groups').where('joinCode', '==', code).limit(1).get();
         exists = !check.empty;
+        attempts++;
       }
       await db.collection('groups').doc(openGroupId).update({ joinCode: code });
       document.getElementById('detailJoinCode').textContent = code;
@@ -966,6 +1004,10 @@
   let editorItems = [];
   let editorReadOnly = false;
 
+  let currentMembers = [];
+  let memberOwnChecked = []
+  let unsubProgress = null;
+
   function newItemId(){ return 'i' + Math.random().toString(36).slice(2, 9); }
 
   function startChecklistListener(groupId) {
@@ -999,6 +1041,16 @@
       main.querySelector('.meta').textContent = n + (n === 1 ? ' item' : ' items') + (c.archived ? ' · Archived' : '');
       main.onclick = () => openChecklistSheet(c.id);
       card.appendChild(main);
+      if (!isLeader && n> 0) {
+        const metaEl = main.querySelector('.meta');
+        db.collection('groups').doc(openGroupId).collection('checklists').doc(c.id)
+        .collection('progress').doc(currentUid).get()
+        .then(snap => {
+          const done = snap.exists ? Math.min((snap.data().checkedIds || []).length, n) : 0;
+          metaEl.textContent = done + ' of ' + n + (n === 1 ? ' item' : ' items') + ' done';
+        })
+        .catch(() => {});
+      }
       if (isLeader) {
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
@@ -1025,7 +1077,7 @@
     }
   }
 
-  function openChecklistSheet(id) {
+  async function openChecklistSheet(id) {
     editorReadOnly = openGroupRole !== 'leader';
     editingChecklistId = id;
     const c = id ? currentChecklists.find(x => x.id === id) : null;
@@ -1037,36 +1089,131 @@
     document.getElementById('addItemBtn').classList.toggle('hidden', editorReadOnly);
     document.getElementById('checklistBtn').classList.toggle('hidden', editorReadOnly);
     document.getElementById('checklistCancelBtn').textContent = editorReadOnly ? 'Close' : 'Cancel';
+    
+    document.getElementById('checklistSummary').classList.toggle('hidden', !(editorReadOnly && id));
+    document.getElementById('checklistProgressBlock').classList.toggle('hidden', !(!editorReadOnly && id));
+
+    memberOwnChecked = [];
+    if (unsubProgress) { unsubProgress(); unsubProgress = null; }
+
+    if (editorReadOnly && id) {
+      try {
+        const snap = await db.collection('groups').doc(openGroupId).collection('checklists')
+          .doc(id).collection('progress').doc(currentUid).get();
+        memberOwnChecked = snap.exists ? (snap.data().checkedIds || []) : [];
+      } catch (err) { 
+        console.error('load own progress failed', err);
+      }
+    }
+    
     renderEditorItems();
+
+    if (!editorReadOnly && id) {
+      unsubProgress = db.collection('groups').doc(openGroupId).collection('checklists')
+        .doc(id).collection('progress')
+        .onSnapshot(snap => renderProgressList(snap, editorItems.length),
+                    err => console.error('progress listener', err));
+    }
+
     openModal('checklist');
   }
 
   function renderEditorItems(focusLast) {
     const wrap = document.getElementById('checklistItems');
     wrap.innerHTML = '';
+    const checkable = editorReadOnly && editingChecklistId;
     editorItems.forEach((item, idx) => {
       const row = document.createElement('div');
-      row.className = 'item-row';
-      const input = document.createElement('input');
-      input.type = 'text';
-      input.value = item.text;
-      input.placeholder = 'Task ' + (idx + 1);
-      input.readOnly = editorReadOnly;
-      input.oninput = () => { item.text = input.value; };
-      input.onkeydown = (e) => {
-        if (e.key === 'Enter') { e.preventDefault(); if (!editorReadOnly) addChecklistItem(); }
-      };
-      row.appendChild(input);
-      if (!editorReadOnly) {
-        const rm = document.createElement('button');
-        rm.type = 'button';
-        rm.className = 'remove-btn';
-        rm.textContent = 'Remove';
-        rm.onclick = () => { editorItems.splice(idx, 1); renderEditorItems(); };
-        row.appendChild(rm);
+      if (checkable) {
+        row.className = 'item-row checkable';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = memberOwnChecked.includes(item.id);
+        const label = document.createElement('span');
+        label.className = 'item-text' + (cb.checked ? ' done' : '');
+        label.textContent = item.text;
+        const toggle = () => toggleMemberItem(item.id);
+        cb.onchange = toggle;
+        label.onclick = toggle;
+        row.appendChild(cb);
+        row.appendChild(label);
+      } else {
+        row.className = 'item-row';
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.value = item.text;
+        input.placeholder = 'Task ' + (idx + 1);
+        input.readOnly = editorReadOnly;
+        input.oninput = () => { item.text = input.value; };
+        input.onkeydown = (e) => {
+          if (e.key === 'Enter') { e.preventDefault(); if (!editorReadOnly) addChecklistItem(); }
+        };
+        row.appendChild(input);
+        if (!editorReadOnly) {
+          const rm = document.createElement('button');
+          rm.type = 'button';
+          rm.className = 'remove-btn';
+          rm.textContent = 'Remove';
+          rm.onclick = () => { editorItems.splice(idx, 1); renderEditorItems(); };
+          row.appendChild(rm);
+        }
+        if (focusLast && idx === editorItems.length - 1) input.focus();
       }
       wrap.appendChild(row);
-      if (focusLast && idx === editorItems.length - 1) input.focus();
+    });
+    if (checkable) renderChecklistSummary();
+  }
+
+  function renderChecklistSummary(){
+    const total = editorItems.length;
+    const done = editorItems.filter(i => memberOwnChecked.includes(i.id)).length;
+    document.getElementById('checklistSummaryText').textContent = done + ' of ' + total + ' done';
+    document.getElementById('checklistSummaryBar').style.width = (total ? Math.round(done / total * 100) : 0) + '%';
+  }
+
+  // A member taps an item: flip it locally right away (feels instant), then
+  // persist their whole checked-ids list. Each member only ever writes their
+  // own progress/{uid} doc — never anyone else's.
+  async function toggleMemberItem(itemId){
+    const idx = memberOwnChecked.indexOf(itemId);
+    if (idx === -1) memberOwnChecked.push(itemId); else memberOwnChecked.splice(idx, 1);
+    renderEditorItems();
+    try {
+      await db.collection('groups').doc(openGroupId).collection('checklists')
+        .doc(editingChecklistId).collection('progress').doc(currentUid)
+        .set({ checkedIds: memberOwnChecked, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+    } catch (err) {
+      console.error('toggle item failed', err);
+      // Revert the local tap since it didn't actually save.
+      const i2 = memberOwnChecked.indexOf(itemId);
+      if (i2 === -1) memberOwnChecked.push(itemId); else memberOwnChecked.splice(i2, 1);
+      renderEditorItems();
+      alert('Could not save that — check your connection and try again.');
+    }
+  }
+
+  // Leader's view: every group member's progress on the checklist that's
+  // currently open. Members who haven't opened it yet just show 0 of N.
+  function renderProgressList(snap, totalItems){
+    const byUid = {};
+    snap.forEach(doc => { byUid[doc.id] = (doc.data().checkedIds || []).length; });
+    const wrap = document.getElementById('checklistProgressList');
+    wrap.innerHTML = '';
+    if (!currentMembers.length) {
+      wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No members in this group yet.</p>';
+      return;
+    }
+    currentMembers.forEach(m => {
+      const done = Math.min(byUid[m.id] || 0, totalItems);
+      const pct = totalItems ? Math.round(done / totalItems * 100) : 0;
+      const row = document.createElement('div');
+      row.className = 'progress-row';
+      row.innerHTML =
+        '<div class="top-line"><span class="pname"></span><span class="pcount"></span></div>' +
+        '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>';
+      row.querySelector('.pname').textContent = m.name || 'Team member';
+      row.querySelector('.pcount').textContent = done + ' / ' + totalItems;
+      wrap.appendChild(row);
     });
   }
 
@@ -1120,6 +1267,12 @@
       step = 'reading checklists';
       const checklistsSnap = await db.collection('groups').doc(gid).collection('checklists').get();
       for (const doc of checklistsSnap.docs) {
+        step = 'reading progress for checklist ' + doc.id;
+        const progressSnap = await doc.ref.collection('progress').get();
+        for (const pDoc of progressSnap.docs) {
+          step = 'deleting progress ' + pDoc.id + ' for checklist ' + doc.id;
+          await pDoc.ref.delete();
+        }
         step = 'deleting groups/' + gid + '/checklists/' + doc.id;
         await doc.ref.delete();
       }
