@@ -1167,6 +1167,9 @@
     }
   }
 
+  const savedChecklist = () => editingChecklistId ? currentChecklists.find(x => x.id === editingChecklistId) : null;
+  const savedItems = () => { const c = savedChecklist(); return c ? (c.items || []) : []; };
+
   async function openChecklistSheet(id) {
     editingChecklistId = id;
     const c = savedChecklist();
