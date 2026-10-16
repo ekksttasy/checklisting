@@ -83,7 +83,38 @@ service cloud.firestore {
         allow create, update: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId));
         allow delete: if isSignedIn() && isGroupLeader(groupId);
 
-        // ---- .../checklists/{checklistId}/progress/{uid} ----
+        // ---- .../checklists/{checklistId}/periods/{periodKey} ----
+        // Phase 6. A period holds title/items snapshots (for reports) and an
+        // entries subcollection. Created on first activity by any participant;
+        // snapshots can be refreshed by the leader/admin when a checklist is
+        // edited; only the leader can delete (group delete / history wipe).
+        match /periods/{periodKey} {
+          allow read: if isSignedIn() && (isGroupLeader(groupId) || isGroupMember(groupId));
+          allow create: if isSignedIn() && (isGroupLeader(groupId) || isGroupMember(groupId));
+          allow update: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId));
+          allow delete: if isSignedIn() && isGroupLeader(groupId);
+
+          // entries/{uid}  — individual checklists: one doc per person, own doc only.
+          // entries/shared — shared checklists: one doc for the whole group,
+          //                  writable by any participant (leader, admins, members).
+          // The leader and administrators can read everyone's individual entries
+          // but never write on someone's behalf.
+          match /entries/{entryId} {
+            allow read: if isSignedIn() && (
+              request.auth.uid == entryId
+              || isGroupLeader(groupId) || isGroupAdmin(groupId)
+              || (entryId == 'shared' && isGroupMember(groupId))
+            );
+            allow create, update: if isSignedIn()
+              && (isGroupLeader(groupId) || isGroupMember(groupId))
+              && (request.auth.uid == entryId || entryId == 'shared');
+            allow delete: if isSignedIn() && (request.auth.uid == entryId || isGroupLeader(groupId));
+          }
+        }
+
+        // ---- LEGACY: .../checklists/{checklistId}/progress/{uid} (Phase 4) ----
+        // Superseded by periods/entries in Phase 6. Kept only so old test docs
+        // can still be read/cleaned up on group delete. Remove once none remain.
         // One doc per participant (the leader, administrators and members
         // all take part), holding which item ids they've checked off.
         // Everyone only ever writes their own doc, and only in a group
