@@ -276,6 +276,11 @@
   .member-row:last-child{ border-bottom:none; }
   .member-row .name{ font-size:14.5px; font-weight:600; }
   .member-row .you{ font-size:12px; color:var(--ink-soft); font-weight:500; }
+  .role-badge.admin{ background:#E6EEF4; color:var(--primary-dark); }
+  .admin-tag{ font-size:11px; font-weight:650; background:#E6EEF4; color:var(--primary-dark); border-radius:99px; padding:2px 8px; margin-left:6px; }
+  .member-actions{ display:flex; gap:10px; align-items:center; }
+  .role-btn{ border:none; background:none; color:var(--primary-dark); font-size:13px; font-weight:650; cursor:pointer; padding:6px 4px; }
+  
   .progress-row{ padding:10px 0; border-bottom:1px solid var(--line); }
   .progress-row:last-child{ border-bottom:none; }
   .progress-row .top-line{ display:flex; justify-content:space-between; font-size:13.5px; margin-bottom:6px; }
@@ -494,31 +499,40 @@
   </div>
 
   
-  <!-- Checklist editor / viewer sheet -->
+  <!-- Checklist view: Progress & Management tabs -->
   <div class = "overlay hidden" id="checklistOverlay">
     <div class="sheet tall">
       <h3 id="checklistSheetTitle">New checklist</h3>
+      <div class="auth-tabs hidden" id="checklistTabs" style="margin-bottom:16px;">
+        <button type="button" class="auth-tab active" id="tabProgress" onclick="setChecklistTab('progress')">Progress</button>
+        <button type="button" class="auth-tab" id="tabManage" onclick="setChecklistTab('manage')">Manage</button>
+      </div>
       <form onsubmit="return handleSaveChecklist(event)">
-        <div class="field">
-          <label for="checklistTitle">Title</label>
-          <input id="checklistTitle" type="text" placeholder="e.g. Opening tasks" required>
-        </div>
-        <div id="checklistSummary" class="hidden" style="margin-bottom:16px;">
-          <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">
-            <span id="checklistSummaryText">0 of 0 done</span>
+        <div id="checklistManagePane">
+          <div class="field">
+            <label for="checklistTitle">Title</label>
+            <input id="checklistTitle" type="text" placeholder="e.g. Opening duties" required>
           </div>
-          <div style="height:8px;border-radius:99px;background:var(--bg);overflow:hidden;">
-            <div id="checklistSummaryBar" style="height:100%;width:0%;background:var(--accent);border-radius:99px;transition:width .15s;"></div>
-          </div>
+          <div class="section-label">Items</div>
+          <div id="checklistItems"></div>
+          <button type="button" class="btn secondary" id="addItemBtn" style="margin-bottom:14px" onclick="addChecklistItem()">+ Add item</button>
+          <button type="button" class="btn secondary hidden" id="manageArchiveBtn" style="margin-bottom:14px" onclick="handleArchiveFromSheet()">Archive checklist</button>
         </div>
-        
-        <div class="section-label">Items</div>
-        <div id="checklistItems"></div>
-        <button type="button" class ="btn secondary" id="addItemBtn" style="margin-bottom:14px" onclick="addChecklistItem()">+ Add item</button>
-        
-        <div id="checklistProgressBlock" class="hidden">
-          <div class="section-label">Team progress</div>
-          <div id="checklistProgressList" style="margin-bottom:14px;"></div>
+
+        <div id="checklistProgressPane" class="hidden">
+          <div id="checklistSummary" style="margin-bottom:16px;">
+            <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">
+              <span id="checklistSummaryText">0 of 0 done</span>
+            </div>
+            <div style="height:8px;border-radius:99px;background:var(--bg);overflow:hidden;">
+              <div id="checklistSummaryBar" style="height:100%;width:0%;background:var(--accent);border-radius:99px;transition:width .15s;"></div>
+            </div>
+          </div>
+          <div id="checklistCheckItems" style="margin-bottom:14px;"></div>
+          <div id="checklistProgressBlock" class="hidden">
+            <div class="section-label">Team progress</div>
+            <div id="checklistProgressList" style="margin-bottom:14px;"></div>
+          </div>
         </div>
         
         <div class="form-msg" id="checklistMsg"></div>
@@ -549,6 +563,7 @@
             <button class="copy-btn" id="rerollCodeBtn" onclick="handleRerollCode()">New Code</button>
           </div>
         </div>
+        <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 22px;">The old code stops working immediately — use this if it's been shared more widely than you'd like.</p>
       </div>
 
       <div id="detailMemberBlock" class="hidden">
@@ -744,9 +759,14 @@
       const m = doc.data();
       const card = document.createElement('button');
       card.className = 'group-card';
-      card.innerHTML = '<div><div class="name"></div><div class="meta">Member</div></div><span class="role-badge member">Joined</span>';
+      const isAdmin = m.role === 'admin';
+      card.innerHTML = '<div><div class="name"></div><div class="meta"></div></div><span class="role-badge"></span>';
       card.querySelector('.name').textContent = m.groupName || 'Untitled group';
-      card.onclick = () => openGroupDetail(doc.id, 'member');
+      card.querySelector('.meta').textContent = isAdmin ? 'Administrator' : 'Member';
+      const badge = card.querySelector('.role-badge');
+      badge.classList.add(isAdmin ? 'admin' : 'member');
+      badge.textContent = isAdmin ? 'Admin' : 'Joined';
+      card.onclick = () => openGroupDetail(doc.id, isAdmin ? 'admin' : 'member');
       list.appendChild(card);
     });
   }
@@ -833,10 +853,10 @@
       const myName = auth.currentUser.displayName || auth.currentUser.email;
       const now = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection('groups').doc(groupDoc.id).collection('members').doc(currentUid).set({
-        uid: currentUid, name: myName, joinedAt: now
+        uid: currentUid, name: myName, role: 'member', joinedAt: now
       });
       await db.collection('users').doc(currentUid).collection('memberships').doc(groupDoc.id).set({
-        groupName: group.name, joinedAt: now
+        groupName: group.name, role: 'member',joinedAt: now
       });
       closeModal('join');
     } catch (err) {
@@ -847,27 +867,40 @@
   }
 
   // ---------- Group detail panel ----------
+  // Leaders and administrators can both manage checklists.
+  const canManage = () => openGroupRole === 'leader' || openGroupRole === 'admin';
+
+  // Shows/hides everything in the group panel that depends on your role.
+  function applyRoleUI(){
+    const role = openGroupRole;
+    document.getElementById('detailLeaderBlock').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('detailMemberBlock').classList.toggle('hidden', role === 'leader');
+    document.getElementById('leaveBtn').classList.toggle('hidden', role === 'leader');
+    document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('newChecklistBtn').classList.toggle('hidden', !canManage());
+  }
+
   async function openGroupDetail(groupId, role) {
     openGroupId = groupId; openGroupRole = role;
     document.getElementById('groupDetail').classList.remove('hidden');
-    document.getElementById('detailLeaderBlock').classList.toggle('hidden', role !== 'leader');
-    document.getElementById('detailMemberBlock').classList.toggle('hidden', role !== 'member');
-    document.getElementById('leaveBtn').classList.toggle('hidden', role !== 'member');
-    document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
-    document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
-    document.getElementById('newChecklistBtn').classList.toggle('hidden', role !== 'leader');
-    showArchived = false; currentChecklists = []; renderChecklists();
+    applyRoleUI();
+    showArchived = false; currentChecklists = []; currentLeader = null; renderChecklists();
 
     const groupSnap = await db.collection('groups').doc(groupId).get();
     if (!groupSnap.exists) { closeGroupDetail(); return; }
+    if (openGroupId !== groupId) return; //closed while loading
     const group = groupSnap.data();
     document.getElementById('detailGroupName').textContent = group.name || 'Group';
     document.getElementById('detailJoinCode').textContent = group.joinCode || '——————';
 
-    if (role === 'member') {
+    if (role === 'leader') {
+      currentLeader = { id: currentUid, name: auth.currentUser.displayName || auth.currentUser.email };
+    } else {
       const leaderProfile = await db.collection('users').doc(group.leaderId).get();
-      document.getElementById('detailLeaderName').textContent =
-        (leaderProfile.exists && leaderProfile.data().name) || 'the group leader';
+      const leaderName = (leaderProfile.exists && leaderProfile.data().name) || 'the group leader';
+      document.getElementById('detailLeaderName').textContent = leaderName;
+      currentLeader = { id: group.leaderId, name: leaderName };
     }
 
     if (unsubMembers) unsubMembers();
@@ -880,6 +913,22 @@
 
   function renderMemberList(snap, role) {
     currentMembers = snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
+    
+    // Leader actions (promotion/demotion) update immediately.
+    if (openGroupRole !== 'leader') {
+      const me = currentMembers.find(f => f.id === currentUid);
+      if (me) {
+        const r = me.role === 'admin' ? 'admin' : 'member';
+        if (r !== openGroupRole) {
+          openGroupRole = r;
+          applyRoleUI();
+          renderChecklists();
+          if (r !== 'admin' && !document.getElementById('checklistOverlay').classList.contains('hidden')) closeModal('checklist');
+        }
+      }
+    }
+    
+    const isLeader = openGroupRole === 'leader';
     const list = document.getElementById('detailMemberList');
     document.getElementById('detailMemberEmpty').classList.toggle('hidden', !snap.empty);
     list.innerHTML = '';
@@ -896,15 +945,53 @@
         tag.className = 'you'; tag.textContent = '(you)';
         nameSpan.appendChild(tag);
       }
+      if (m.role === 'admin') {
+        const tag = document.createElement('span');
+        tag.className = 'admin-tag'; tag.textContent = 'Admin';
+        nameSpan.appendChild(tag);
+      }
       row.appendChild(nameSpan);
       if (role === 'leader') {
+        const actions = document.createElement('span');
+        actions.className = 'member-actions';
+        const roleBtn = document.createElement('button');
+        roleBtn.className = 'role-btn';
+        roleBtn.textContent = m.role === 'admin' ? 'Remove admin' : 'Make admin';
+        roleBtn.onclick = () => handleSetRole(doc.id, m.name, m.role === 'admin' ? 'member' : 'admin');
         const btn = document.createElement('button');
         btn.className = 'remove-btn'; btn.textContent = 'Remove';
         btn.onclick = () => handleRemoveMember(doc.id, m.name);
-        row.appendChild(btn);
+        actions.appendChild(roleBtn);
+        actions.appendChild(btn);
+        row.appendChild(actions);
       }
       list.appendChild(row);
     });
+  }
+
+  // Only Group leaders have promotion/demotion powers. The roster doc is what the rules check;
+  // the copy on the member's own membership doc just drives the badge in their group list.
+  async function handleSetRole(uid, name, newRole){
+    if (!openGroupId) return;
+    const who = name || 'this member';
+    const msg = newRole === 'admin'
+      ? 'Make ' + who + " a group administrator? They'll be able to create, edit and archive checklists."
+      : 'Remove administrator access for ' + who + "? They'll still be a member, but will no longer be able to manage checklists.";
+    if (!confirm(msg)) return;
+    const gid = openGroupId;
+    let step = 'updating the roster';
+    try {
+      await db.collection('groups').doc(gid).collection('members').doc(uid).update({ role: newRole });
+      step = 'updating their group list';
+      try {
+        await db.collection('users').doc(uid).collection('memberships').doc(gid).update({ role: newRole });
+      } catch (innerErr) {
+        if (innerErr.code !== 'not-found') throw innerErr;
+      }
+    } catch (err) {
+      console.error('Role change failed while ' + step, err);
+      alert('Could not change role while ' + step + ':\n' + err.message);
+    }
   }
 
   function closeGroupDetail() {
@@ -1021,13 +1108,13 @@
   }
 
   function renderChecklists() {
-    const isLeader = openGroupRole === 'leader';
+    const manage = canManage();
     const list = document.getElementById('detailChecklistList');
     const archivedCount = currentChecklists.filter(c => c.archived).length;
-    const shown = (isLeader && showArchived) ? currentChecklists : currentChecklists.filter(c => !c.archived);
+    const shown = (manage && showArchived) ? currentChecklists : currentChecklists.filter(c => !c.archived);
     list.innerHTML = '';
     document.getElementById('detailChecklistEmpty').classList.toggle('hidden', shown.length > 0);
-    document.getElementById('detailChecklistEmptyText').textContent = isLeader
+    document.getElementById('detailChecklistEmptyText').textContent = manage
       ? 'No checklists yet. Tap + New to create one.'
       : "Your leader hasn't set a checklist yet.";
     shown.forEach(c => {
@@ -1041,17 +1128,18 @@
       main.querySelector('.meta').textContent = n + (n === 1 ? ' item' : ' items') + (c.archived ? ' · Archived' : '');
       main.onclick = () => openChecklistSheet(c.id);
       card.appendChild(main);
-      if (!isLeader && n> 0) {
+      if (n> 0) {
         const metaEl = main.querySelector('.meta');
         db.collection('groups').doc(openGroupId).collection('checklists').doc(c.id)
         .collection('progress').doc(currentUid).get()
         .then(snap => {
-          const done = snap.exists ? Math.min((snap.data().checkedIds || []).length, n) : 0;
-          metaEl.textContent = done + ' of ' + n + (n === 1 ? ' item' : ' items') + ' done';
+          const ids = new Set((c.items || []).map(i => i.id));
+          const done = snap.exists ? (snap.data().checkedIds || []).filter(x => ids.has(x)).length : 0;
+          metaEl.textContent = done + ' of ' + n + (n === 1 ? ' item' : ' items') + ' done' + (c.archived ? ' · Archived' : '');
         })
         .catch(() => {});
       }
-      if (isLeader) {
+      if (manage) {
         const btn = document.createElement('button');
         btn.className = 'copy-btn';
         btn.textContent = c.archived ? 'Unarchive' : 'Archive';
@@ -1061,42 +1149,39 @@
       list.appendChild(card);
     });
     const toggle = document.getElementById('archivedToggle');
-    toggle.classList.toggle('hidden', !(isLeader && archivedCount > 0));
+    toggle.classList.toggle('hidden', !(manage && archivedCount > 0));
     toggle.textContent = showArchived ? 'Hide archived' : 'Show archived (' + archivedCount + ')';
   }
 
   function toggleShowArchived() { showArchived = !showArchived; renderChecklists(); }
 
   async function toggleArchive(c) {
-    if (!openGroupId) return;
+    if (!openGroupId) return false;
     try {
       await db.collection('groups').doc(openGroupId).collection('checklists').doc(c.id).update({ archived: !c.archived });
+      return true;
     } catch (err) {
       console.error('Archive toggle failed', err);
       alert('Could not update checklist: ' + err.message);
+      return false;
     }
   }
 
   async function openChecklistSheet(id) {
-    editorReadOnly = openGroupRole !== 'leader';
     editingChecklistId = id;
-    const c = id ? currentChecklists.find(x => x.id === id) : null;
+    const c = savedChecklist();
+    const manage = canManage();
     editorItems = c ? (c.items || []).map(i => ({ id: i.id, text: i.text})) : [{ id: newItemId(), text: '' }];
-    const title = document.getElementById('checklistTitle');
-    title.value = c ? (c.title || '') : '';
-    title.readOnly = editorReadOnly;
-    document.getElementById('checklistSheetTitle').textContent = editorReadOnly ? 'Checklist' : (c ? 'Edit checklist' : 'New checklist');
-    document.getElementById('addItemBtn').classList.toggle('hidden', editorReadOnly);
-    document.getElementById('checklistBtn').classList.toggle('hidden', editorReadOnly);
-    document.getElementById('checklistCancelBtn').textContent = editorReadOnly ? 'Close' : 'Cancel';
-    
-    document.getElementById('checklistSummary').classList.toggle('hidden', !(editorReadOnly && id));
-    document.getElementById('checklistProgressBlock').classList.toggle('hidden', !(!editorReadOnly && id));
+    document.getElementById('checklistTitle').value = c ? (c.title || '') : '';
+    // The tab bar only matters if you can manage AND the checklist already exists;
+    // a brand-new checklist has no progress yet, so it opens straight on Manage.
+    document.getElementById('checklistTabs').classList.toggle('hidden', !(manage && id));
 
     memberOwnChecked = [];
+    lastProgressSnap = null;
     if (unsubProgress) { unsubProgress(); unsubProgress = null; }
 
-    if (editorReadOnly && id) {
+    if (id) {
       try {
         const snap = await db.collection('groups').doc(openGroupId).collection('checklists')
           .doc(id).collection('progress').doc(currentUid).get();
@@ -1105,79 +1190,108 @@
         console.error('load own progress failed', err);
       }
     }
-    
-    renderEditorItems();
 
-    if (!editorReadOnly && id) {
+    setChecklistTab(id ? 'progress' : 'manage');
+
+    if (manage && id) {
+      // leader/admin board of group's live progress
       unsubProgress = db.collection('groups').doc(openGroupId).collection('checklists')
         .doc(id).collection('progress')
-        .onSnapshot(snap => renderProgressList(snap, editorItems.length),
+        .onSnapshot(snap => { lastProgressSnap = snap; renderProgressList(); },
                     err => console.error('progress listener', err));
     }
 
-    openModal('checklist');
+      openModal('checklist');
+  }
+
+  function setChecklistTab(tab){
+    if (!canManage()) tab = 'progress';
+    checklistTab = tab;
+    const c = savedChecklist();
+    document.getElementById('checklistManagePane').classList.toggle('hidden', tab !== 'manage');
+    document.getElementById('checklistProgressPane').classList.toggle('hidden', tab !== 'progress');
+    document.getElementById('tabProgress').classList.toggle('active', tab === 'progress');
+    document.getElementById('tabManage').classList.toggle('active', tab === 'manage');
+    document.getElementById('checklistSheetTitle').textContent =
+      tab === 'manage' ? (c ? 'Edit checklist' : 'New checklist') : (c ? (c.title || 'Checklist') : 'Checklist');
+    document.getElementById('checklistBtn').classList.toggle('hidden', tab !== 'manage');
+    document.getElementById('checklistCancelBtn').textContent = tab === 'manage' ? 'Cancel' : 'Close';
+    const arch = document.getElementById('manageArchiveBtn');
+    arch.classList.toggle('hidden', !c);
+    if (c) arch.textContent = c.archived ? 'Unarchive checklist' : 'Archive checklist';
+    document.getElementById('checklistProgressBlock').classList.toggle('hidden', !canManage());
+    clearMsg('checklistMsg');
+    renderEditorItems();
+    renderCheckItems();
+    renderProgressList();
   }
 
   function renderEditorItems(focusLast) {
     const wrap = document.getElementById('checklistItems');
     wrap.innerHTML = '';
-    const checkable = editorReadOnly && editingChecklistId;
     editorItems.forEach((item, idx) => {
       const row = document.createElement('div');
-      if (checkable) {
-        row.className = 'item-row checkable';
-        const cb = document.createElement('input');
-        cb.type = 'checkbox';
-        cb.checked = memberOwnChecked.includes(item.id);
-        const label = document.createElement('span');
-        label.className = 'item-text' + (cb.checked ? ' done' : '');
-        label.textContent = item.text;
-        const toggle = () => toggleMemberItem(item.id);
-        cb.onchange = toggle;
-        label.onclick = toggle;
-        row.appendChild(cb);
-        row.appendChild(label);
-      } else {
-        row.className = 'item-row';
-        const input = document.createElement('input');
-        input.type = 'text';
-        input.value = item.text;
-        input.placeholder = 'Task ' + (idx + 1);
-        input.readOnly = editorReadOnly;
-        input.oninput = () => { item.text = input.value; };
-        input.onkeydown = (e) => {
-          if (e.key === 'Enter') { e.preventDefault(); if (!editorReadOnly) addChecklistItem(); }
-        };
-        row.appendChild(input);
-        if (!editorReadOnly) {
-          const rm = document.createElement('button');
-          rm.type = 'button';
-          rm.className = 'remove-btn';
-          rm.textContent = 'Remove';
-          rm.onclick = () => { editorItems.splice(idx, 1); renderEditorItems(); };
-          row.appendChild(rm);
-        }
-        if (focusLast && idx === editorItems.length - 1) input.focus();
-      }
+      row.className = 'item-row';
+      const input = document.createElement('input');
+      input.type = 'text';
+      input.value = item.text;
+      input.placeholder = 'Task ' + (idx + 1);
+      input.oninput = () => { item.text = input.value; };
+      input.onkeydown = (e) => {
+        if (e.key === 'Enter') { e.preventDefault(); addChecklistItem(); }
+      };
+      row.appendChild(input);
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'remove-btn';
+      rm.textContent = 'Remove';
+      rm.onclick = () => { editorItems.splice(idx, 1); renderEditorItems(); };
+      row.appendChild(rm);
       wrap.appendChild(row);
+      if (focusLast && idx === editorItems.length - 1) input.focus();
     });
-    if (checkable) renderChecklistSummary();
   }
 
-  function renderChecklistSummary(){
-    const total = editorItems.length;
-    const done = editorItems.filter(i => memberOwnChecked.includes(i.id)).length;
+  function renderCheckItems(){
+    const wrap = document.getElementById('checklistCheckItems');
+    wrap.innerHTML = '';
+    const items = savedItems();
+    if (!items.length) {
+      wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:14px;">No items yet.</p>';
+    }
+    items.forEach(item => {
+      const row = document.createElement('div');
+      row.className = 'item-row checkable';
+      const cb = document.createElement('input');
+      cb.type = 'checkbox';
+      cb.checked = memberOwnChecked.includes(item.id);
+      const label = document.createElement('span');
+      label.className = 'item-text' + (cb.checked ? ' done' : '');
+      label.textContent = item.text;
+      const toggle = () => toggleMemberItem(item.id);
+      cb.onchange = toggle;
+      label.onclick = toggle;
+      row.appendChild(cb);
+      row.appendChild(label);
+      wrap.appendChild(row);
+    });
+    renderChecklistSummary(items);
+  }
+
+  function renderChecklistSummary(items){
+    const total = items.length;
+    const done = items.filter(i => memberOwnChecked.includes(i.id)).length;
     document.getElementById('checklistSummaryText').textContent = done + ' of ' + total + ' done';
     document.getElementById('checklistSummaryBar').style.width = (total ? Math.round(done / total * 100) : 0) + '%';
   }
 
   // A member taps an item: flip it locally right away (feels instant), then
-  // persist their whole checked-ids list. Each member only ever writes their
-  // own progress/{uid} doc — never anyone else's.
+  // persist their whole checked-ids list. Individual lists mean members only
+  // write to their own doc.
   async function toggleMemberItem(itemId){
     const idx = memberOwnChecked.indexOf(itemId);
     if (idx === -1) memberOwnChecked.push(itemId); else memberOwnChecked.splice(idx, 1);
-    renderEditorItems();
+    renderCheckItems();
     try {
       await db.collection('groups').doc(openGroupId).collection('checklists')
         .doc(editingChecklistId).collection('progress').doc(currentUid)
@@ -1187,31 +1301,46 @@
       // Revert the local tap since it didn't actually save.
       const i2 = memberOwnChecked.indexOf(itemId);
       if (i2 === -1) memberOwnChecked.push(itemId); else memberOwnChecked.splice(i2, 1);
-      renderEditorItems();
+      renderCheckItems();
       alert('Could not save that — check your connection and try again.');
     }
   }
 
+  // Full group progress view: the leader plus every member (admins included).
+  function progressParticipants(){
+    const people = [];
+    if (currentLeader) people.push({ id: currentLeader.id, name: currentLeader.name, tag: 'leader' });
+    currentMembers.forEach(m => people.push({ id: m.id, name: m.name, tag: m.role === 'admin' ? 'admin' : '' }));
+    return people;
+  }
+
   // Leader's view: every group member's progress on the checklist that's
   // currently open. Members who haven't opened it yet just show 0 of N.
-  function renderProgressList(snap, totalItems){
-    const byUid = {};
-    snap.forEach(doc => { byUid[doc.id] = (doc.data().checkedIds || []).length; });
+  function renderProgressList(){
     const wrap = document.getElementById('checklistProgressList');
     wrap.innerHTML = '';
-    if (!currentMembers.length) {
+    if (!canManage() || !editingChecklistId) return;
+    const items = savedItems();
+    const ids = new Set(items.map(i => i.id));
+    const totalItems = items.length;
+    const byUid = {};
+    if (lastProgressSnap) lastProgressSnap.forEach(doc => {
+      byUid[doc.id] = (doc.data().checkedIds || []).filter(x => ids.has(x)).length;
+    });
+    const people = progressParticipants();
+    if (!people.length) {
       wrap.innerHTML = '<p style="color:var(--ink-soft);font-size:13.5px;">No members in this group yet.</p>';
       return;
     }
-    currentMembers.forEach(m => {
-      const done = Math.min(byUid[m.id] || 0, totalItems);
+    people.forEach(p => {
+      const done = byUid[p.id] || 0;
       const pct = totalItems ? Math.round(done / totalItems * 100) : 0;
       const row = document.createElement('div');
       row.className = 'progress-row';
       row.innerHTML =
         '<div class="top-line"><span class="pname"></span><span class="pcount"></span></div>' +
         '<div class="bar-track"><div class="bar-fill" style="width:' + pct + '%"></div></div>';
-      row.querySelector('.pname').textContent = m.name || 'Team member';
+      row.querySelector('.pname').textContent = (p.name || 'Team member') + (p.tag ? ' (' + p.tag + ')' : '');
       row.querySelector('.pcount').textContent = done + ' / ' + totalItems;
       wrap.appendChild(row);
     });
@@ -1222,9 +1351,16 @@
     renderEditorItems(true);
   }
 
+  async function handleArchiveFromSheet(){
+    const c = savedChecklist();
+    if (!c) return;
+    const ok = await toggleArchive(c);
+    if (ok) closeModal('checklist');
+  }
+
   async function handleSaveChecklist(e) {
     e.preventDefault();
-    if (editorReadOnly || !openGroupId) return false;
+    if (!canManage() || !openGroupId) return false;
     clearMsg('checklistMsg');
     const title = document.getElementById('checklistTitle').value.trim();
     const items = editorItems.map(i => ({ id: i.id, text: i.text.trim() })).filter(i => i.text);

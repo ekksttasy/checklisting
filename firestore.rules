@@ -11,6 +11,13 @@ service cloud.firestore {
       return exists(/databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid));
     }
 
+    // Administrators are members whose roster doc says role == 'admin'.
+    // (Roster docs from before roles existed have no role — those are plain members.)
+    function isGroupAdmin(groupId) {
+      let rosterDoc = /databases/$(database)/documents/groups/$(groupId)/members/$(request.auth.uid);
+      return exists(rosterDoc) && get(rosterDoc).data.get('role', 'member') == 'admin';
+    }
+
     // ---- users/{uid} : basic profile ----
     match /users/{uid} {
       // Readable by any signed-in group member (needed to show leader/member
@@ -23,7 +30,7 @@ service cloud.firestore {
       match /memberships/{groupId} {
         allow read: if isSignedIn() && request.auth.uid == uid;
         allow create: if isSignedIn() && request.auth.uid == uid;
-        // a member can update their own membership doc & a group's leader
+        // A member can update their own membership doc & a group's leader
         // can also update it. ensures renaming a group can cascade the
         // new name onto every member's copy.
         allow update: if isSignedIn() && (
@@ -49,21 +56,47 @@ service cloud.firestore {
       // ---- groups/{groupId}/members/{uid} : roster ----
       match /members/{uid} {
         allow read: if isSignedIn();
-        // Someone can only add themselves as a member (no one can add
-        // another person on their behalf).
-        allow create: if isSignedIn() && request.auth.uid == uid;
-        // A member can remove themselves; the group's leader can remove anyone.
+        // Someone can only add themselves, and only as a plain member —
+        // pinning the role here is what stops a joiner from making
+        // themselves an administrator.
+        allow create: if isSignedIn() && request.auth.uid == uid
+          && request.resource.data.role == 'member';
+        // A member can remove themselves; the group's leader can remove
+        // anyone.
         allow delete: if isSignedIn() && (
           request.auth.uid == uid || isGroupLeader(groupId)
         );
-        allow update: if false;
+        // Only the leader can change anything on a roster doc, and the only
+        // thing that can change is the role (promote / demote).
+        allow update: if isSignedIn() && isGroupLeader(groupId)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['role'])
+          && request.resource.data.role in ['member', 'admin'];
       }
 
-      // ---- grous/{groupId}/checklists{checklistId} ----
-      // The leader creates/edits/archives, & leader & all members can read.
+      // ---- groups/{groupId}/checklists/{checklistId} ----
+      // The leader and administrators create/edit/archive (archiving is an
+      // update); only the leader can delete (that happens when a group is
+      // deleted). The leader and current members (administrators are
+      // members) can read.
       match /checklists/{checklistId} {
         allow read: if isSignedIn() && (isGroupLeader(groupId) || isGroupMember(groupId));
-        allow create, update, delete: if isSignedIn() && isGroupLeader(groupId);
+        allow create, update: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId));
+        allow delete: if isSignedIn() && isGroupLeader(groupId);
+
+        // ---- .../checklists/{checklistId}/progress/{uid} ----
+        // One doc per participant (the leader, administrators and members
+        // all take part), holding which item ids they've checked off.
+        // Everyone only ever writes their own doc, and only in a group
+        // they belong to. The leader and administrators can read everyone's
+        // (for the team progress view) but never write on someone's behalf.
+        match /progress/{uid} {
+          allow read: if isSignedIn() && (
+            request.auth.uid == uid || isGroupLeader(groupId) || isGroupAdmin(groupId)
+          );
+          allow create, update: if isSignedIn() && request.auth.uid == uid
+            && (isGroupLeader(groupId) || isGroupMember(groupId));
+          allow delete: if isSignedIn() && (request.auth.uid == uid || isGroupLeader(groupId));
+        }
       }
     }
   }
