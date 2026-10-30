@@ -3,6 +3,13 @@ service cloud.firestore {
   match /databases/{database}/documents {
 
     function isSignedIn() { return request.auth != null; }
+
+    function validAnnouncementText() {
+      return request.resource.data.text is string
+        && request.resource.data.text.size() > 0
+        && request.resource.data.text.size() <= 2000;
+    }
+    
     function isGroupLeader(groupId) {
       return get(/databases/$(database)/documents/groups/$(groupId)).data.leaderId == request.auth.uid;
     }
@@ -73,6 +80,18 @@ service cloud.firestore {
           && request.resource.data.role in ['member', 'admin'];
       }
 
+      // ---- groups/{groupId}/announcements/{announcementId} ----
+      // The leader and administrators post, edit, pin and delete;
+      // the leader and current members (administrators are members) can read,
+      // including expired ones, which the app lists under "Past announcements".
+      match /announcements/{announcementId} {
+        allow read: if isSignedIn() && (isGroupLeader(groupId) || isGroupMember(groupId));
+        allow create: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId))
+          && request.resource.data.createdBy == request.auth.uid && validAnnouncementText();
+        allow update: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId)) && validAnnouncementText();
+        allow delete: if isSignedIn() && (isGroupLeader(groupId) || isGroupAdmin(groupId));
+      }
+
       // ---- groups/{groupId}/checklists/{checklistId} ----
       // The leader and administrators create/edit/archive (archiving is an
       // update); only the leader can delete (that happens when a group is
@@ -84,7 +103,7 @@ service cloud.firestore {
         allow delete: if isSignedIn() && isGroupLeader(groupId);
 
         // ---- .../checklists/{checklistId}/periods/{periodKey} ----
-        // Phase 6. A period holds title/items snapshots (for reports) and an
+        // A period holds title/items snapshots (for reports) and an
         // entries subcollection. Created on first activity by any participant;
         // snapshots can be refreshed by the leader/admin when a checklist is
         // edited; only the leader can delete (group delete / history wipe).

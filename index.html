@@ -334,6 +334,30 @@
 }
 .item-by{ font-size:12px; color:var(--ink-soft); margin-top:2px; }
 .mode-hint{ font-size:12px; color:var(--ink-soft); line-height:1.4; }
+.field select{ width:100%; padding:11px 12px; font-size:15px; font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); }
+.reset-detail{ display:flex; gap:8px; margin-top:8px; }
+.reset-detail > div{ flex:1; min-width:0; }
+.period-banner{ font-size:12.5px; color:var(--ink-soft); background:var(--bg); border-radius:8px; padding:8px 12px; margin-bottom:14px; }
+.field textarea{ width:100%; padding:11px 12px; font-size:15px; font-family:inherit; border:1px solid var(--line); border-radius:8px; background:var(--bg); color:var(--ink); resize:vertical; min-height:110px; }
+.field textarea:focus{ outline:2px solid var(--primary); outline-offset:1px; background:var(--surface); }
+.field .ann-check{ display:flex; align-items:center; gap:8px; font-size:14.5px; font-weight:600; color:var(--ink); margin-bottom:4px; }
+.field .ann-check input{ width:auto; padding:0; accent-color:var(--primary); }
+.ann-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 14px; margin-bottom:22px; }
+.ann-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; }
+.ann-head .section-label{ margin-bottom:0; }
+.ann-body{ max-height:200px; overflow-y:auto; overscroll-behavior:contain; }
+.ann-item{ padding:10px 0; border-bottom:1px solid var(--line); }
+.ann-item:last-child{ border-bottom:none; }
+.ann-item.pinned{ border-left:3px solid var(--accent); padding-left:10px; }
+.ann-item.past .ann-text{ color:var(--ink-soft); }
+.ann-text{ font-size:14px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+.ann-meta{ font-size:12px; color:var(--ink-soft); margin-top:5px; display:flex; flex-wrap:wrap; align-items:center; gap:2px 10px; }
+.ann-pin{ font-size:11px; font-weight:650; background:#FBF1DF; color:var(--accent); border-radius:99px; padding:2px 8px; }
+.ann-empty{ font-size:13.5px; color:var(--ink-soft); padding:8px 0; }
+.ann-past-title{ font-size:12px; font-weight:650; color:var(--ink-soft); margin:14px 0 0; padding-top:10px; border-top:1px solid var(--line); }
+.ann-toolbar{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
+.ann-fmt{ border:1px solid var(--line); background:var(--bg); color:var(--primary-dark); width:34px; height:32px; border-radius:8px; font-size:15px; cursor:pointer; }
+.ann-count{ text-align:right; font-size:12px; color:var(--ink-soft); opacity:.55; margin-top:4px; }
 </style>
 </head>
 <body>
@@ -501,6 +525,59 @@
   </div>
 
   
+  <!-- Announcement sheet -->
+  <div class="overlay hidden" id="announcementOverlay">
+    <div class="sheet tall">
+      <h3 id="annSheetTitle">New announcement</h3>
+      <form onsubmit="return handleSaveAnnouncement(event)">
+        <div class="field">
+          <label for="annText">Announcement</label>
+          <div class="ann-toolbar">
+            <button type="button" class="ann-fmt" onclick="fmtAnn('**')" aria-label="Bold"><b>B</b></button>
+            <button type="button" class="ann-fmt" onclick="fmtAnn('*')" aria-label="Italic"><i>I</i></button>
+            <span class="mode-hint">Select text, then tap B or I.</span>
+          </div>
+          <textarea id="annText" maxlength="2000" required oninput="updateAnnCount()" onkeydown="annKey(event)"></textarea>
+          <div class="ann-count" id="annCount">2000 left</div>
+        </div>
+        <div class="field">
+          <label for="annExpiry">Show until (optional)</label>
+          <input id="annExpiry" type="datetime-local">
+          <p class="mode-hint" style="margin-top:6px;">Moves to Past announcements at that date and time (group timezone). Leave empty to keep it up until you remove it.</p>
+        </div>
+        <div class="field">
+          <label class="ann-check"><input type="checkbox" id="annPinned"> Pin to top</label>
+          <p class="mode-hint">Only one announcement can be pinned — pinning this one unpins the current one.</p>
+        </div>
+        <div class="form-msg" id="announcementMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('announcement')">Cancel</button>
+          <button type="submit" class="btn" id="announcementBtn">Post</button>
+        </div>
+        <button type="button" class="leave-btn hidden" id="annDeleteBtn" onclick="handleDeleteAnnouncement()">Delete announcement</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Group timezone sheet -->
+  <div class="overlay hidden" id="timezoneOverlay">
+    <div class="sheet">
+      <h3>Group timezone</h3>
+      <form onsubmit="return handleSaveTimezone(event)">
+        <div class="field">
+          <label for="tzSelect">Timezone</label>
+          <select id="tzSelect"></select>
+        </div>
+        <p class="mode-hint" style="margin-bottom:12px;">Daily and weekly resets happen on this clock, whatever timezone each person's phone is set to.</p>
+        <div class="form-msg" id="timezoneMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('timezone')">Cancel</button>
+          <button type="submit" class="btn" id="timezoneBtn">Save</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- Checklist view: Progress & Management tabs -->
   <div class = "overlay hidden" id="checklistOverlay">
     <div class="sheet tall">
@@ -523,6 +600,21 @@
             </div>
             <p class="mode-hint" id="checklistModeHint"></p>
           </div>
+          <div class="field" id="checklistResetField">
+            <label for="resetCycle">Reset</label>
+            <select id="resetCycle" onchange="syncResetFields()">
+              <option value="none">Never — one running list</option>
+              <option value="daily">Every day</option>
+              <option value="weekly">Every week</option>
+              <option value="monthly">Every month</option>
+            </select>
+            <div id="resetDetail" class="reset-detail hidden">
+              <div id="resetDayWrap"><select id="resetDay" aria-label="Week starts on"></select></div>
+              <div id="resetMonthWrap"><select id="resetMonthDay" aria-label="Month starts on"></select></div>
+              <div><select id="resetHour" aria-label="Reset time"></select></div>
+            </div>
+            <p class="mode-hint" style="margin-top:6px;">Uses the group's timezone. Nothing is deleted at reset — each period keeps its own record for reports.</p>
+          </div>
           <div class="section-label">Items</div>
           <div id="checklistItems"></div>
           <button type="button" class="btn secondary" id="addItemBtn" style="margin-bottom:14px" onclick="addChecklistItem()">+ Add item</button>
@@ -530,6 +622,7 @@
         </div>
 
         <div id="checklistProgressPane" class="hidden">
+          <div class="period-banner hidden" id="checklistPeriodInfo"></div>
           <div id="checklistSummary" style="margin-bottom:16px;">
             <div style="display:flex;justify-content:space-between;font-size:13px;color:var(--ink-soft);margin-bottom:6px;">
               <span id="checklistSummaryText">0 of 0 done</span>
@@ -573,11 +666,25 @@
             <button class="copy-btn" id="rerollCodeBtn" onclick="handleRerollCode()">New Code</button>
           </div>
         </div>
-        <p style="font-size:12px;color:var(--ink-soft);margin:10px 0 22px;">The old code stops working immediately — use this if it's been shared more widely than you'd like.</p>
+        <p id="rerollNote" style="font-size:12px;color:var(--ink-soft);margin:10px 0 22px;">The old code stops working immediately — use this if it's been shared more widely than you'd like.</p>
       </div>
 
       <div id="detailMemberBlock" class="hidden">
         <p style="color:var(--ink-soft);font-size:13.5px;margin-bottom:20px;">Led by <strong id="detailLeaderName">—</strong></p>
+      </div>
+
+      <div class="ann-card hidden" id="annCard">
+        <div class="ann-head">
+          <div class="section-label">Announcements</div>
+          <button class="copy-btn hidden" id="newAnnBtn" onclick="openAnnouncementSheet(null)">+ Post</button>
+        </div>
+        <div class="ann-body" id="annBody"></div>
+        <button class="link-btn hidden" id="annPastToggle" onclick="togglePastAnn()"></button>
+      </div>
+
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;font-size:13.5px;color:var(--ink-soft);">
+        <span>Timezone: <span id="detailTz">—</span></span>
+        <button class="copy-btn hidden" id="tzChangeBtn" onclick="openTimezoneSheet()">Change</button>
       </div>
 
       <div class="checklists-block">
@@ -782,8 +889,8 @@
   }
 
   // ---------- Group modals ----------
-  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName', checklist: 'checklistTitle' };
-  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save', checklist: 'Save' };
+  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName', checklist: 'checklistTitle', timezone: 'tzSelect', announcement: 'annText' };
+  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save', checklist: 'Save', timezone: 'Save', announcement: 'Post' };
 
   function openModal(which) {
     document.getElementById(which + 'Overlay').classList.remove('hidden');
@@ -825,7 +932,7 @@
         attempts++;
       }
       await db.collection('groups').add({
-        name, leaderId: currentUid, joinCode: code,
+        name, leaderId: currentUid, joinCode: code, timezone: deviceTz(),
         createdAt: firebase.firestore.FieldValue.serverTimestamp()
       });
       closeModal('create');
@@ -883,19 +990,22 @@
   // Shows/hides everything in the group panel that depends on your role.
   function applyRoleUI(){
     const role = openGroupRole;
-    document.getElementById('detailLeaderBlock').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('detailLeaderBlock').classList.toggle('hidden', !canManage());
+    document.getElementById('rerollCodeBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('rerollNote').classList.toggle('hidden', role !== 'leader');
     document.getElementById('detailMemberBlock').classList.toggle('hidden', role === 'leader');
     document.getElementById('leaveBtn').classList.toggle('hidden', role === 'leader');
     document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
     document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
     document.getElementById('newChecklistBtn').classList.toggle('hidden', !canManage());
+    renderAnnouncements();
   }
 
   async function openGroupDetail(groupId, role) {
     openGroupId = groupId; openGroupRole = role;
     document.getElementById('groupDetail').classList.remove('hidden');
     applyRoleUI();
-    showArchived = false; currentChecklists = []; currentLeader = null; renderChecklists();
+    showArchived = false; currentChecklists = []; currentLeader = null; currentGroupTz = null; renderTzRow(); currentAnnouncements = []; showPastAnn = false; renderAnnouncements(); renderChecklists();
 
     const groupSnap = await db.collection('groups').doc(groupId).get();
     if (!groupSnap.exists) { closeGroupDetail(); return; }
@@ -903,6 +1013,13 @@
     const group = groupSnap.data();
     document.getElementById('detailGroupName').textContent = group.name || 'Group';
     document.getElementById('detailJoinCode').textContent = group.joinCode || '——————';
+    currentGroupTz = group.timezone || null;
+    if (role === 'leader' && !group.timezone) {
+      // Groups made before Phase 7 get the leader's device timezone once.
+      currentGroupTz = deviceTz();
+      db.collection('groups').doc(groupId).update({ timezone: currentGroupTz }).catch(err => console.warn('timezone backfill', err));
+    }
+    renderTzRow();
 
     if (role === 'leader') {
       currentLeader = { id: currentUid, name: auth.currentUser.displayName || auth.currentUser.email };
@@ -918,7 +1035,8 @@
       .orderBy('joinedAt', 'asc')
       .onSnapshot(snap => renderMemberList(snap, role), err => console.error('member listener', err));
 
-    startChecklistListener(groupId);  
+    startChecklistListener(groupId);
+    startAnnouncementListener(groupId);  
   }
 
   function renderMemberList(snap, role) {
@@ -1008,6 +1126,8 @@
     document.getElementById('groupDetail').classList.add('hidden');
     if (unsubMembers) { unsubMembers(); unsubMembers = null; }
     if (unsubChecklists) { unsubChecklists(); unsubChecklists = null; }
+    if (unsubAnn) { unsubAnn(); unsubAnn = null; }
+    currentAnnouncements = [];
     if (unsubProgress) { unsubProgress(); unsubProgress = null; }
     currentMembers = [];
     if (unsubShared) { unsubShared(); unsubShared = null; }
@@ -1094,6 +1214,266 @@
     return false;
   }
 
+  // ---------- Announcements ----------
+  // groups/{g}/announcements/{id}: { text, createdBy, createdByName, createdAt, updatedAt, expiresAt|null, pinned }
+  let unsubAnn = null, currentAnnouncements = [], showPastAnn = false, editingAnnId = null, annSig = null, annError = null;
+  const annMs = a => (a && a.expiresAt && a.expiresAt.toMillis) ? a.expiresAt.toMillis() : null;
+  const annExpired = a => { const e = annMs(a); return e !== null && e <= Date.now(); };
+  const annTime = a => (a.createdAt && a.createdAt.toMillis) ? a.createdAt.toMillis() : Date.now();
+  const ymd = (y, m, d) => y + '-' + pad2(m) + '-' + pad2(d);
+  // An expiry is a real instant. The picker's date + time is read as GROUP-timezone wall-clock time.
+  function annExpiryValue(ms){
+    const w = new Date(wallClockMs(groupTz(), new Date(ms)));
+    return ymd(w.getUTCFullYear(), w.getUTCMonth() + 1, w.getUTCDate()) + 'T' + pad2(w.getUTCHours()) + ':' + pad2(w.getUTCMinutes());
+  }
+  function annDateLabel(ms){
+    const o = { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' };
+    try { return new Date(ms).toLocaleString([], Object.assign({ timeZone: groupTz() }, o)); }
+    catch (e) { return new Date(ms).toLocaleString([], o); }
+  }
+  function annExpiryToMs(value){
+    const parts = value.split('T');
+    const [y, m, d] = parts[0].split('-').map(Number);
+    const [h, mi] = (parts[1] || '00:00').split(':').map(Number);
+    return wallToInstant(groupTz(), Date.UTC(y, m - 1, d, h, mi));
+  }
+  const annCol = () => db.collection('groups').doc(openGroupId).collection('announcements');
+
+  function startAnnouncementListener(groupId){
+    if (unsubAnn) unsubAnn();
+    annError = null;
+    unsubAnn = annCol().orderBy('createdAt', 'desc').onSnapshot(snap => {
+      annError = null;
+      currentAnnouncements = snap.docs.map(d => Object.assign({ id: d.id }, d.data({ serverTimestamps: 'estimate' })));
+      renderAnnouncements();
+    }, err => {
+      console.error('announcement listener', err);
+      annError = err.code ? err.code + ' — ' + err.message : err.message;
+      renderAnnouncements();
+    });
+  }
+
+  // Bold/italic: **bold** and *italic* markers, shown with respective formatting.
+  function formatAnn(text){
+    return escapeHtml(text)
+      .replace(/\*\*\*(\S(?:.*?\S)?)\*\*\*/g, '<strong><em>$1</em></strong>')
+      .replace(/\*\*(\S(?:.*?\S)?)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*(\S(?:.*?\S)?)\*/g, '<em>$1</em>');
+  }
+  function updateAnnCount(){
+    document.getElementById('annCount').textContent = (2000 - document.getElementById('annText').value.length) + ' left';
+  }
+  function fmtAnn(mk){
+    const ta = document.getElementById('annText');
+    if (ta.value.length + mk.length * 2 > 2000) return;
+    const st = ta.selectionStart, en = ta.selectionEnd;
+    ta.value = ta.value.slice(0, st) + mk + ta.value.slice(st, en) + mk + ta.value.slice(en);
+    ta.focus();
+    if (st === en) ta.setSelectionRange(st + mk.length, st + mk.length);
+    else ta.setSelectionRange(st + mk.length, en + mk.length);
+    updateAnnCount();
+  }
+  function annKey(e){
+    if (!(e.ctrlKey || e.metaKey)) return;
+    const k = e.key.toLowerCase();
+    if (k === 'b') { e.preventDefault(); fmtAnn('**'); }
+    else if (k === 'i') { e.preventDefault(); fmtAnn('*'); }
+  }
+
+  function annItem(a, manage, past){
+    const el = document.createElement('div');
+    el.className = 'ann-item' + (a._top && !past ? ' pinned' : '') + (past ? ' past' : '');
+    const t = document.createElement('div');
+    t.className = 'ann-text';
+    t.innerHTML = formatAnn(a.text || '');
+    el.appendChild(t);
+    const meta = document.createElement('div');
+    meta.className = 'ann-meta';
+    if (a._top && !past) {
+      const pin = document.createElement('span');
+      pin.className = 'ann-pin'; pin.textContent = 'Pinned';
+      meta.appendChild(pin);
+    }
+    const by = document.createElement('span');
+    const nameOf = (uid, name, fallback) => uid === currentUid ? 'You' : (name || fallback);
+    const authors = [nameOf(a.createdBy, a.createdByName, 'Leader')].concat((a.editors || []).filter(x => x.uid !== a.createdBy).map(x => nameOf(x.uid, x.name, 'Admin')));
+    by.textContent = authors.join(' + ') + ' · ' + fmtWhen(a.createdAt);
+    meta.appendChild(by);
+    const e = annMs(a);
+    if (e !== null) {
+      const ex = document.createElement('span');
+      ex.textContent = (past ? 'Expired ' : 'Until ') + annDateLabel(e);
+      meta.appendChild(ex);
+    }
+    if (manage) {
+      if (!past) {
+        const pinBtn = document.createElement('button');
+        pinBtn.className = 'role-btn';
+        pinBtn.textContent = a._top ? 'Unpin' : 'Pin';
+        pinBtn.onclick = () => toggleAnnPin(a);
+        meta.appendChild(pinBtn);
+      }
+      const edit = document.createElement('button');
+      edit.className = 'role-btn';
+      edit.textContent = 'Edit';
+      edit.onclick = () => openAnnouncementSheet(a.id);
+      meta.appendChild(edit);
+    }
+    el.appendChild(meta);
+    return el;
+  }
+
+  // Announcements card: pinned posts show first, with newest posts following. 
+  // Expired posts live under the "Past announcements" tab.
+  function renderAnnouncements(){
+    const manage = canManage();
+    const live = currentAnnouncements.filter(a => !annExpired(a));
+    // Self-healing: if more than one live post is flagged pinned, only the most recently pinned counts.
+    const pinKey = a => (a.pinnedAt && a.pinnedAt.toMillis) ? a.pinnedAt.toMillis() : annTime(a);
+    const topPin = live.filter(a => a.pinned).sort((x, y) => pinKey(y) - pinKey(x))[0];
+    currentAnnouncements.forEach(a => { a._top = !!topPin && a.id === topPin.id; });
+    const active = live.sort((a, b) => (b._top ? 1 : 0) - (a._top ? 1 : 0) || annTime(b) - annTime(a));
+    const past = currentAnnouncements.filter(annExpired).sort((a, b) => annTime(b) - annTime(a));
+    document.getElementById('annCard').classList.toggle('hidden', !manage && !currentAnnouncements.length && !annError);
+    document.getElementById('newAnnBtn').classList.toggle('hidden', !manage);
+    const body = document.getElementById('annBody');
+    const keepScroll = body.scrollTop;
+    body.innerHTML = '';
+    if (annError) {
+      const er = document.createElement('div');
+      er.className = 'ann-empty';
+      er.style.color = 'var(--danger)';
+      er.textContent = 'Couldn’t load announcements: ' + annError;
+      body.appendChild(er);
+      return;
+    }
+    if (!active.length) {
+      const p = document.createElement('div');
+      p.className = 'ann-empty';
+      p.textContent = manage ? 'No current announcements. Tap + Post to add one.' : 'No current announcements.';
+      body.appendChild(p);
+    }
+    active.forEach(a => body.appendChild(annItem(a, manage, false)));
+    if (showPastAnn && past.length) {
+      const h = document.createElement('div');
+      h.className = 'ann-past-title';
+      h.textContent = 'Past announcements';
+      body.appendChild(h);
+      past.forEach(a => body.appendChild(annItem(a, manage, true)));
+    }
+    body.scrollTop = keepScroll;
+    const toggle = document.getElementById('annPastToggle');
+    toggle.classList.toggle('hidden', !past.length);
+    toggle.textContent = showPastAnn ? 'Hide past announcements' : 'Past announcements (' + past.length + ')';
+  }
+
+  function togglePastAnn(){ showPastAnn = !showPastAnn; renderAnnouncements(); }
+
+  function openAnnouncementSheet(id){
+    if (!canManage() || !openGroupId) return;
+    editingAnnId = id;
+    const a = id ? currentAnnouncements.find(x => x.id === id) : null;
+    const exp = a ? annMs(a) : null;
+    document.getElementById('annSheetTitle').textContent = a ? 'Edit announcement' : 'New announcement';
+    document.getElementById('annText').value = a ? (a.text || '') : '';
+    updateAnnCount();
+    document.getElementById('annExpiry').value = exp !== null ? annExpiryValue(exp) : '';
+    document.getElementById('annPinned').checked = !!(a && a._top);
+    document.getElementById('annDeleteBtn').classList.toggle('hidden', !a);
+    document.getElementById('announcementBtn').textContent = a ? 'Save' : 'Post';
+    openModal('announcement');
+  }
+
+  async function handleSaveAnnouncement(e){
+    e.preventDefault();
+    if (!canManage() || !openGroupId) return false;
+    clearMsg('announcementMsg');
+    const text = document.getElementById('annText').value.trim();
+    if (!text) return false;
+    if (document.getElementById('annText').value.length > 2000) { showMsg('announcementMsg', 'That’s over the 2000-character limit — shorten it a little.', 'error'); return false; }
+    const pinned = document.getElementById('annPinned').checked;
+    const val = document.getElementById('annExpiry').value;
+    const orig = editingAnnId ? currentAnnouncements.find(x => x.id === editingAnnId) : null;
+    let expiresAt = null;
+    if (val) {
+      const origMs = orig ? annMs(orig) : null;
+      if (origMs !== null && val === annExpiryValue(origMs)) {
+        expiresAt = orig.expiresAt; // date untouched — keep as is (even if already past)
+      } else {
+        const ms = annExpiryToMs(val);
+        if (ms <= Date.now()) { showMsg('announcementMsg', 'That time has already passed — choose a later time.', 'error'); return false; }
+        expiresAt = firebase.firestore.Timestamp.fromMillis(ms);
+      }
+    }
+    const btn = document.getElementById('announcementBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      const SV = firebase.firestore.FieldValue.serverTimestamp();
+      const col = annCol();
+      const batch = db.batch();
+      let ref;
+      if (orig) {
+        ref = col.doc(orig.id);
+        // Anyone other than the original author who edits gets added to the byline ("Sam + Alex").
+        const editors = (orig.editors || []).slice();
+        if (currentUid !== orig.createdBy && !editors.some(x => x.uid === currentUid)) {
+          editors.push({ uid: currentUid, name: auth.currentUser.displayName || auth.currentUser.email });
+        }
+        batch.update(ref, Object.assign({ text, expiresAt, pinned, editors, updatedAt: SV }, (pinned && !orig._top) ? { pinnedAt: SV } : {}));
+      } else {
+        ref = col.doc();
+        batch.set(ref, {
+          text, expiresAt, pinned, pinnedAt: pinned ? SV : null, editors: [], createdBy: currentUid,
+          createdByName: auth.currentUser.displayName || auth.currentUser.email,
+          createdAt: SV, updatedAt: SV
+        });
+      }
+      // Only one announcement can be pinned: pinning this one unpins any other.
+      if (pinned) {
+        const others = await col.where('pinned', '==', true).get(); // ask the server, not our local list
+        others.forEach(d => { if (d.id !== ref.id) batch.update(d.ref, { pinned: false }); });
+      }
+      await batch.commit();
+      closeModal('announcement');
+    } catch (err) {
+      console.error('Save announcement failed', err);
+      showMsg('announcementMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = editingAnnId ? 'Save' : 'Post';
+    }
+    return false;
+  }
+
+  async function toggleAnnPin(a){
+    if (!canManage() || !openGroupId) return;
+    try {
+      const col = annCol();
+      const batch = db.batch();
+      if (a._top) {
+        batch.update(col.doc(a.id), { pinned: false });
+      } else {
+        const others = await col.where('pinned', '==', true).get(); // ask the server, not our local list
+        others.forEach(d => { if (d.id !== a.id) batch.update(d.ref, { pinned: false }); });
+        batch.update(col.doc(a.id), { pinned: true, pinnedAt: firebase.firestore.FieldValue.serverTimestamp() });
+      }
+      await batch.commit();
+    } catch (err) {
+      console.error('Pin toggle failed', err);
+      alert('Could not update announcement: ' + err.message);
+    }
+  }
+
+  async function handleDeleteAnnouncement(){
+    if (!editingAnnId || !openGroupId) return;
+    if (!confirm('Delete this announcement for everyone? This can\'t be undone.')) return;
+    try {
+      await annCol().doc(editingAnnId).delete();
+      closeModal('announcement');
+    } catch (err) {
+      console.error('Delete announcement failed', err);
+      showMsg('announcementMsg', err.message, 'error');
+    }
+  }
+
   // ---------- Checklists ----------
   let unsubChecklists = null;
   let currentChecklists = [];
@@ -1117,8 +1497,171 @@
   // ----- Phase 6 helpers: modes + period-based progress paths -----
   // groups/{g}/checklists/{c}/periods/{periodKey}/entries/{uid | 'shared'}
   const modeOf = c => (c && c.mode === 'shared') ? 'shared' : 'individual';
-  // Phase 7 swaps this for a clock-based key ('2026-10-15', '2026-W42').
-  function currentPeriodKey(c){ return 'once'; }
+  // ----- Phase 7: periods come from the clock, in the GROUP's timezone -----
+  // No reset -> 'once'. Daily -> '2026-10-15' (date the period started).
+  // Weekly -> 'wk-2026-10-12' (date the week started).
+  let currentGroupTz = null;
+  function deviceTz(){ try { return Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'; } catch (e) { return 'UTC'; } }
+  function groupTz(){ return currentGroupTz || deviceTz(); }
+  const WEEKDAYS = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const DAY_MS = 86400000;
+  const pad2 = n => String(n).padStart(2, '0');
+  function hourLabel(h){ return (h % 12 || 12) + ':00 ' + (h < 12 ? 'AM' : 'PM'); }
+  function resetOf(c){
+    const r = (c && c.reset) || {};
+    return {
+      cycle: (r.cycle === 'daily' || r.cycle === 'weekly' || r.cycle === 'monthly') ? r.cycle : 'none',
+      hour: (Number.isInteger(r.hour) && r.hour >= 0 && r.hour < 24) ? r.hour : 0,
+      weekStartDay: (Number.isInteger(r.weekStartDay) && r.weekStartDay >= 0 && r.weekStartDay < 7) ? r.weekStartDay : 1,
+      monthDay: (Number.isInteger(r.monthDay) && r.monthDay >= 1 && r.monthDay <= 31) ? r.monthDay : 1
+    };
+  }
+  // The wall-clock time in tz, expressed as if it were UTC milliseconds.
+  function wallClockMs(tz, at){
+    let parts;
+    const opts = { hourCycle: 'h23', year: 'numeric', month: 'numeric', day: 'numeric', hour: 'numeric', minute: 'numeric', second: 'numeric' };
+    try { parts = new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: tz }, opts)).formatToParts(at); }
+    catch (e) { parts = new Intl.DateTimeFormat('en-GB', Object.assign({ timeZone: 'UTC' }, opts)).formatToParts(at); }
+    const p = {};
+    parts.forEach(x => { p[x.type] = +x.value; });
+    return Date.UTC(p.year, p.month - 1, p.day, p.hour % 24, p.minute, p.second);
+  }
+  // Inverse of wallClockMs: the real instant (ms) at which tz's wall clock reads wallMs.
+  function wallToInstant(tz, wallMs){
+    const off = t => wallClockMs(tz, new Date(t)) - Math.floor(t / 1000) * 1000;
+    let t = wallMs - off(wallMs);
+    for (let i = 0; i < 2; i++) t = wallMs - off(t);
+    return t;
+  }
+  const daysInMonth = (y, m) => new Date(Date.UTC(y, m + 1, 0)).getUTCDate(); // m: 0-11
+  // Start day for a month, clamped to short months (31 -> 30 / 28 / 29).
+  const monthStartMs = (y, m, day) => Date.UTC(y, m, Math.min(day, daysInMonth(y, m)));
+  function periodInfo(c, at){
+    const r = resetOf(c);
+    if (r.cycle === 'none') return { key: 'once', cycle: 'none' };
+    at = at || new Date();
+    const tz = groupTz();
+    const wall = wallClockMs(tz, at);
+    // Shift back by the reset hour so e.g. 1 AM still belongs to "yesterday" when reset is 4 AM.
+    const shifted = wall - r.hour * 3600000;
+    let startDay, endDay, prefix = '';
+    if (r.cycle === 'monthly') {
+      const sd = new Date(shifted);
+      let y = sd.getUTCFullYear(), m = sd.getUTCMonth();
+      if (shifted < monthStartMs(y, m, r.monthDay)) { m--; if (m < 0) { m = 11; y--; } }
+      startDay = monthStartMs(y, m, r.monthDay);
+      const ny = m === 11 ? y + 1 : y, nm = (m + 1) % 12;
+      endDay = monthStartMs(ny, nm, r.monthDay);
+      prefix = 'mo-';
+    } else {
+      startDay = Math.floor(shifted / DAY_MS) * DAY_MS;
+      let len = DAY_MS;
+      if (r.cycle === 'weekly') {
+        const dow = new Date(startDay).getUTCDay();
+        startDay -= ((dow - r.weekStartDay + 7) % 7) * DAY_MS;
+        len = 7 * DAY_MS;
+        prefix = 'wk-';
+      }
+      endDay = startDay + len;
+    }
+    const d = new Date(startDay);
+    const dateStr = d.getUTCFullYear() + '-' + pad2(d.getUTCMonth() + 1) + '-' + pad2(d.getUTCDate());
+    return { key: prefix + dateStr, cycle: r.cycle, startDay, msLeft: wallToInstant(tz, endDay + r.hour * 3600000) - at.getTime() };
+  }
+  function currentPeriodKey(c){ return periodInfo(c).key; }
+  function fmtLeft(ms){
+    const m = Math.max(1, Math.ceil(ms / 60000));
+    const d = Math.floor(m / 1440), h = Math.floor((m % 1440) / 60), mm = m % 60;
+    return d ? d + 'd ' + h + 'h' : (h ? h + 'h ' + mm + 'm' : mm + 'm');
+  }
+  function periodLabel(c){
+    const p = periodInfo(c);
+    if (p.cycle === 'none') return '';
+    let ds;
+    if (p.cycle === 'monthly' && resetOf(c).monthDay === 1) {
+      ds = new Date(p.startDay).toLocaleDateString([], { month: 'long', year: 'numeric', timeZone: 'UTC' });
+    } else {
+      ds = new Date(p.startDay).toLocaleDateString([], { weekday: p.cycle === 'monthly' ? undefined : 'short', day: 'numeric', month: 'short', timeZone: 'UTC' });
+      if (p.cycle === 'weekly') ds = 'Week of ' + ds;
+      if (p.cycle === 'monthly') ds = 'From ' + ds;
+    }
+    return ds + ' · resets in ' + fmtLeft(p.msLeft);
+  }
+  const resetTag = c => ({ daily: ' · Resets daily', weekly: ' · Resets weekly', monthly: ' · Resets monthly' })[resetOf(c).cycle] || '';
+  function updatePeriodBanner(c){
+    const el = document.getElementById('checklistPeriodInfo');
+    const text = c ? periodLabel(c) : '';
+    el.textContent = text;
+    el.classList.toggle('hidden', !text);
+  }
+
+  // Reset controls in the Manage pane
+  (function initResetOptions(){
+    const day = document.getElementById('resetDay'), hr = document.getElementById('resetHour');
+    WEEKDAYS.forEach((n, i) => day.add(new Option('Week starts ' + n, i)));
+    const ord = n => n + ((n % 100 >= 11 && n % 100 <= 13) ? 'th' : ({ 1: 'st', 2: 'nd', 3: 'rd' })[n % 10] || 'th');
+    const md = document.getElementById('resetMonthDay');
+    for (let n = 1; n <= 31; n++) md.add(new Option('Month starts on the ' + ord(n) + (n > 28 ? ' (or last day)' : ''), n));
+    for (let h = 0; h < 24; h++) hr.add(new Option('Resets at ' + hourLabel(h), h));
+  })();
+  function syncResetFields(){
+    const cycle = document.getElementById('resetCycle').value;
+    document.getElementById('resetDetail').classList.toggle('hidden', cycle === 'none');
+    document.getElementById('resetDayWrap').classList.toggle('hidden', cycle !== 'weekly');
+    document.getElementById('resetMonthWrap').classList.toggle('hidden', cycle !== 'monthly');
+  }
+  function fillResetField(c){
+    const r = resetOf(c);
+    document.getElementById('resetCycle').value = r.cycle;
+    document.getElementById('resetDay').value = r.weekStartDay;
+    document.getElementById('resetMonthDay').value = r.monthDay;
+    document.getElementById('resetHour').value = r.hour;
+    syncResetFields();
+  }
+  function readResetField(){
+    return {
+      cycle: document.getElementById('resetCycle').value,
+      hour: +document.getElementById('resetHour').value,
+      weekStartDay: +document.getElementById('resetDay').value,
+      monthDay: +document.getElementById('resetMonthDay').value
+    };
+  }
+
+  // Group timezone (set by leader)
+  function renderTzRow(){
+    document.getElementById('detailTz').textContent = groupTz().replace(/_/g, ' ');
+    document.getElementById('tzChangeBtn').classList.toggle('hidden', openGroupRole !== 'leader');
+  }
+  function openTimezoneSheet(){
+    const sel = document.getElementById('tzSelect');
+    if (!sel.options.length) {
+      let zones = [];
+      try { zones = Intl.supportedValuesOf('timeZone'); } catch (e) {}
+      if (!zones.includes('UTC')) zones.push('UTC');
+      zones.forEach(z => sel.add(new Option(z.replace(/_/g, ' '), z)));
+    }
+    if (![...sel.options].some(o => o.value === groupTz())) sel.add(new Option(groupTz(), groupTz()));
+    sel.value = groupTz();
+    openModal('timezone');
+  }
+  async function handleSaveTimezone(e){
+    e.preventDefault();
+    clearMsg('timezoneMsg');
+    const tz = document.getElementById('tzSelect').value;
+    if (!tz || !openGroupId) return false;
+    const btn = document.getElementById('timezoneBtn');
+    btn.disabled = true; btn.textContent = 'Saving…';
+    try {
+      await db.collection('groups').doc(openGroupId).update({ timezone: tz });
+      currentGroupTz = tz;
+      renderTzRow(); renderChecklists();
+      closeModal('timezone');
+    } catch (err) {
+      showMsg('timezoneMsg', err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Save';
+    }
+    return false;
+  }
   function checklistRef(cid){ return db.collection('groups').doc(openGroupId).collection('checklists').doc(cid); }
   function periodRef(c){ return checklistRef(c.id).collection('periods').doc(currentPeriodKey(c)); }
   function entriesCol(c){ return periodRef(c).collection('entries'); }
@@ -1176,7 +1719,7 @@
       main.innerHTML = '<div class="name"></div><div class="meta"></div>';
       main.querySelector('.name').textContent = c.title || 'Untitled checklist';
       const n = (c.items || []).length;
-      main.querySelector('.meta').textContent = n + (n === 1 ? ' item' : ' items') + (c.mode === 'shared' ? ' · Shared' : '') + (c.archived ? ' · Archived' : '');
+      main.querySelector('.meta').textContent = n + (n === 1 ? ' item' : ' items') + (c.mode === 'shared' ? ' · Shared' : '') + resetTag(c) + (c.archived ? ' · Archived' : '');
       main.onclick = () => openChecklistSheet(c.id);
       card.appendChild(main);
       if (n> 0) {
@@ -1191,7 +1734,7 @@
             ? Object.keys(snap.data().checked || {}).filter(x => ids.has(x)).length
             : (snap.data().checkedIds || []).filter(x => ids.has(x)).length;
           }
-        metaEl.textContent = done + ' of ' + n + (n === 1 ? ' item' : ' items') + ' done' + (shared ? ' · Shared' : '') + (c.archived ? ' · Archived' : '');
+        metaEl.textContent = done + ' of ' + n + (n === 1 ? ' item' : ' items') + ' done' + (shared ? ' · Shared' : '') + resetTag(c) + (c.archived ? ' · Archived' : '');
         })
         .catch(() => {});
       }
@@ -1237,38 +1780,61 @@
     // a brand-new checklist has no progress yet, so it opens straight on Manage.
     document.getElementById('checklistTabs').classList.toggle('hidden', !(manage && id));
 
-    memberOwnChecked = [];
-    sharedChecked = {};
-    lastProgressSnap = null;
-    if (unsubProgress) { unsubProgress(); unsubProgress = null; }
-    if (unsubShared) { unsubShared(); unsubShared = null; }
-
-    if (id && c) {
-      if (modeOf(c) === 'shared') {
-        // Group progress record is a shared live doc
-        unsubShared = entriesCol(c).doc('shared').onSnapshot(snap => {
-          sharedChecked = snap.exists ? (snap.data({ serverTimestamps: 'estimate' }).checked || {}) : {};
-          renderCheckItems();
-        }, err => console.error('shared listener', err));
-      } else {
-        try {
-          const snap = await entriesCol(c).doc(currentUid).get();
-          memberOwnChecked = snap.exists ? (snap.data().checkedIds || []) : [];
-        } catch (err) { 
-          console.error('load own progress failed', err);
-        }
-        if (manage) {
-          // leader/admin board of the group's live progress
-          unsubProgress = entriesCol(c).onSnapshot(
-            snap => { lastProgressSnap = snap; renderProgressList(); },
-            err => console.error('progress listener', err));
-        }
-      }
-    }
+    fillResetField(c);
+    await bindProgress(c);
+    sheetPeriodKey = c ? currentPeriodKey(c) : null;
 
     setChecklistTab(id ? 'progress' : 'manage');
     openModal('checklist');
   }
+
+  let sheetPeriodKey = null;
+  // (Re)attaches the live progress listeners for the CURRENT period of checklist c.
+  async function bindProgress(c){
+    memberOwnChecked = []; sharedChecked = {}; lastProgressSnap = null;
+    if (unsubProgress) { unsubProgress(); unsubProgress = null; }
+    if (unsubShared) { unsubShared(); unsubShared = null; }
+    if (!c) return;
+    if (modeOf(c) === 'shared') {
+      unsubShared = entriesCol(c).doc('shared').onSnapshot(snap => {
+        sharedChecked = snap.exists ? (snap.data({ serverTimestamps: 'estimate' }).checked || {}) : {};
+        renderCheckItems();
+      }, err => console.error('shared listener', err));
+    } else {
+      try {
+        const snap = await entriesCol(c).doc(currentUid).get();
+        memberOwnChecked = snap.exists ? (snap.data().checkedIds || []) : [];
+      } catch (err) { console.error('load own progress failed', err); }
+      if (canManage()) {
+        unsubProgress = entriesCol(c).onSnapshot(
+          snap => { lastProgressSnap = snap; renderProgressList(); },
+          err => console.error('progress listener', err));
+      }
+    }
+  }
+
+  // Once a minute-ish: update the countdown, and move to the new period when one starts.
+  let listPeriodSig = null;
+  setInterval(() => {
+    if (!openGroupId) return;
+    const sheetOpen = !document.getElementById('checklistOverlay').classList.contains('hidden');
+    const c = savedChecklist();
+    if (sheetOpen && c) {
+      updatePeriodBanner(c);
+      const key = currentPeriodKey(c);
+      if (key !== sheetPeriodKey) {
+        sheetPeriodKey = key;
+        bindProgress(c).then(() => { renderCheckItems(); renderProgressList(); });
+      }
+    }
+    const sig = currentChecklists.map(x => currentPeriodKey(x)).join('|');
+    if (listPeriodSig !== null && sig !== listPeriodSig && !sheetOpen) renderChecklists();
+    listPeriodSig = sig;
+    // Announcements whose expiry has just passed move to "Past".
+    const aSig = currentAnnouncements.map(a => annExpired(a) ? 'x' : 'a').join('');
+    if (annSig !== null && aSig !== annSig) renderAnnouncements();
+    annSig = aSig;
+  }, 20000);
 
   function setEditorMode(m) {
     if (savedChecklist()) return;
@@ -1379,6 +1945,7 @@
       wrap.appendChild(row);
     });
     renderChecklistSummary(items);
+    updatePeriodBanner(savedChecklist());
   }
 
   function renderChecklistSummary(items){
@@ -1499,6 +2066,7 @@
     const title = document.getElementById('checklistTitle').value.trim();
     const items = editorItems.map(i => ({ id: i.id, text: i.text.trim() })).filter(i => i.text);
     if (!title) return false;
+    const reset = readResetField();
     if (!items.length) { showMsg('checklistMsg', 'Add at least one item.', 'error'); return false; }
     const btn = document.getElementById( 'checklistBtn');
     btn.disabled = true; btn.textContent = 'Saving...';
@@ -1506,7 +2074,7 @@
       const col = db.collection('groups').doc(openGroupId).collection('checklists');
       if (editingChecklistId) {
         const existing = savedChecklist();
-        await col.doc(editingChecklistId).update({ title, items });
+        await col.doc(editingChecklistId).update({ title, items, reset });
         if (existing) {
           try {
             await periodRef(existing).update({ titleSnapshot: title, itemsSnapshot: items });
@@ -1514,7 +2082,7 @@
         }
       } else {
         await col.add({
-          title, items, mode: editorMode, archived: false, createdBy: currentUid,
+          title, items, reset, mode: editorMode, archived: false, createdBy: currentUid,
           createdAt: firebase.firestore.FieldValue.serverTimestamp()
         });
       }
@@ -1564,6 +2132,12 @@
         }
         step = 'deleting groups/' + gid + '/checklists/' + doc.id;
         await doc.ref.delete();
+      }
+      step = 'reading announcements';
+      const annSnap = await db.collection('groups').doc(gid).collection('announcements').get();
+      for (const a of annSnap.docs) {
+        step = 'deleting announcement ' + a.id;
+        await a.ref.delete();
       }
       step = 'deleting groups/' + gid;
       await db.collection('groups').doc(gid).delete();
