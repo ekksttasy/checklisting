@@ -32,6 +32,14 @@ A file on your computer only works for you. To get a real link users & group lea
 - Any other static host works too (Netlify, Vercel, S3).
 - Once it's on a real link, users open it in Safari/Chrome on their phone and can **Add to Home Screen** — it behaves like an installed app, no App Store needed.
 
+## 7. Account emails (password reset & verification)
+Firebase sends these for you, free. To tweak the wording or sender name:
+**Build → Authentication → Templates** (Password reset, Email address verification).
+They're links, not codes, and often land in spam on first send — the app tells
+people to check there. Once the app is on a real link, make sure its domain is
+listed under **Authentication → Settings → Authorized domains** (Firebase Hosting
+domains are added automatically).
+
 ## About "sending an invite"
 Firebase's free client-side tools can't have a group leader create a
 password for someone else remotely.Instead: a leader creates a group and gets a

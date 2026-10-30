@@ -358,9 +358,36 @@
 .ann-toolbar{ display:flex; align-items:center; gap:6px; margin-bottom:6px; }
 .ann-fmt{ border:1px solid var(--line); background:var(--bg); color:var(--primary-dark); width:34px; height:32px; border-radius:8px; font-size:15px; cursor:pointer; }
 .ann-count{ text-align:right; font-size:12px; color:var(--ink-soft); opacity:.55; margin-top:4px; }
+
+/* ---------- Group settings panel ---------- */
+#groupSettings{ position:fixed; inset:0; background:var(--bg); z-index:16; display:flex; flex-direction:column; }
+.settings-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:12px 16px; margin-bottom:10px; }
+.settings-row .s-label{ font-size:12px; color:var(--ink-soft); margin-bottom:2px; }
+.settings-row .s-val{ font-size:15px; font-weight:600; overflow-wrap:anywhere; }
+/* ---------- Phase 8: history, reports ---------- */
+.hist-row{ display:block; width:100%; text-align:left; background:none; border:none; border-bottom:1px solid var(--line); cursor:pointer; font-family:inherit; color:inherit; }
+.hd-person{ border-bottom:1px solid var(--line); padding:9px 0; }
+.hd-person summary{ cursor:pointer; font-size:14px; font-weight:600; display:flex; justify-content:space-between; gap:8px; }
+.hd-list{ list-style:none; margin:8px 0 0; padding:0; font-size:13.5px; }
+.hd-list li{ padding:3px 0; }
+.hd-list li.no, .hd-list li.no .item-by{ color:var(--ink-soft); }
+#printArea{ display:none; }
+@media print{
+  body.printing{ display:block; background:#fff; }
+  body.printing > *:not(#printArea){ display:none !important; }
+  body.printing #printArea{ display:block; color:#000; font-size:12px; line-height:1.4; }
+  #printArea h1{ font-size:20px; margin:0 0 4px; }
+  #printArea h2{ font-size:16px; margin:22px 0 6px; border-bottom:1px solid #999; padding-bottom:3px; }
+  #printArea h3{ font-size:13px; margin:12px 0 4px; }
+  #printArea p{ margin:2px 0; }
+  #printArea .pr-sub{ color:#555; }
+  #printArea .pr-p{ break-inside:avoid; }
+}
 </style>
 </head>
 <body>
+
+<div id="printArea"></div>
 
 <!-- ================= AUTH SCREEN ================= -->
 <div id="authScreen">
@@ -392,6 +419,7 @@
         <label for="loginPassword">Password</label>
         <input id="loginPassword" type="password" autocomplete="current-password" required>
       </div>
+      <button class="link-btn" type="button" onclick="handleForgotPassword()" style="margin-bottom:6px;">Forgot password?</button>
       <button class="btn" type="submit" id="loginBtn">Log in</button>
       <div class="form-msg" id="loginMsg"></div>
     </form>
@@ -405,6 +433,10 @@
       <div class="field">
         <label for="signupEmail">Email</label>
         <input id="signupEmail" type="email" autocomplete="email" required>
+      </div>
+      <div class="field">
+        <label for="signupEmail2">Confirm email</label>
+        <input id="signupEmail2" type="email" autocomplete="off" required>
       </div>
       <div class="field">
         <label for="signupPassword">Password</label>
@@ -453,9 +485,17 @@
 
     <!-- Account view -->
     <section id="view-account" class="hidden">
+      <div class="account-card hidden" id="verifyCard" style="margin-bottom:14px;">
+        <h3 style="font-size:15px;margin-bottom:6px;">Verify your email</h3>
+        <p class="mode-hint" style="margin-bottom:12px;">Verifying shows your address is real, so you can get a password reset link if you ever forget your password. We’ll email you a link — open it, then come back here.</p>
+        <button class="btn" type="button" id="verifySendBtn" onclick="handleSendVerification()">Send verification email</button>
+        <button class="btn secondary" type="button" onclick="handleCheckVerified()">I’ve verified</button>
+        <div class="form-msg" id="verifyMsg"></div>
+      </div>
       <div class="account-card">
         <div class="account-row"><span>Name</span><span id="acctName">—</span></div>
         <div class="account-row"><span>Email</span><span id="acctEmail">—</span></div>
+        <div class="account-row"><span>Email status</span><span id="acctVerified">—</span></div>
         <button class="signout-btn" onclick="handleLogout()">Log out</button>
       </div>
     </section>
@@ -585,6 +625,7 @@
       <div class="auth-tabs hidden" id="checklistTabs" style="margin-bottom:16px;">
         <button type="button" class="auth-tab active" id="tabProgress" onclick="setChecklistTab('progress')">Progress</button>
         <button type="button" class="auth-tab" id="tabManage" onclick="setChecklistTab('manage')">Manage</button>
+        <button type="button" class="auth-tab" id="tabHistory" onclick="setChecklistTab('history')">History</button>
       </div>
       <form onsubmit="return handleSaveChecklist(event)">
         <div id="checklistManagePane">
@@ -638,6 +679,17 @@
           </div>
         </div>
         
+        <div id="checklistHistoryPane" class="hidden">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+            <button type="button" class="copy-btn" onclick="exportReports('print', editingChecklistId, 'checklistMsg')">Print / PDF</button>
+            <button type="button" class="copy-btn" onclick="exportReports('csv', editingChecklistId, 'checklistMsg')">CSV</button>
+            <button type="button" class="copy-btn" onclick="exportReports('json', editingChecklistId, 'checklistMsg')">JSON</button>
+            <button type="button" class="copy-btn hidden" id="histWipeBtn" onclick="openWipeSheet(editingChecklistId)">Wipe history</button>
+          </div>
+          <div id="histList"></div>
+          <div id="histDetail" class="hidden"></div>
+        </div>
+
         <div class="form-msg" id="checklistMsg"></div>
         <div class="sheet-actions">
           <button type="button" class="btn secondary" id="checklistCancelBtn" onclick="closeModal('checklist')">Cancel</button>
@@ -647,12 +699,74 @@
     </div>
   </div>
 
+  <!-- Wipe history sheet -->
+  <div class="overlay hidden" id="wipeOverlay">
+    <div class="sheet tall">
+      <h3>Wipe history</h3>
+      <form onsubmit="return handleWipe(event)">
+        <p class="mode-hint" id="wipeScopeText" style="margin-bottom:12px;"></p>
+        <div class="field">
+          <label for="wipeKeepN">Keep recent history (optional)</label>
+          <div class="reset-detail" style="margin-top:0;">
+            <div><input id="wipeKeepN" type="number" min="0" placeholder="e.g. 4"></div>
+            <div><select id="wipeKeepUnit" aria-label="Unit"><option value="weeks">weeks</option><option value="days">days</option></select></div>
+          </div>
+          <p class="mode-hint" style="margin-top:6px;">Leave empty to delete every past period. The current period is always kept.</p>
+        </div>
+        <p class="mode-hint" style="margin-bottom:6px;color:var(--danger);">Deleted reports can’t be recovered. Download a backup first.</p>
+        <button type="button" class="link-btn" onclick="exportReports('json', wipeScope, 'wipeMsg')">Download JSON backup</button>
+        <div class="field">
+          <label for="wipeConfirm">Type WIPE to confirm</label>
+          <input id="wipeConfirm" type="text" autocomplete="off" autocapitalize="characters">
+        </div>
+        <div class="form-msg" id="wipeMsg"></div>
+        <div class="sheet-actions">
+          <button type="button" class="btn secondary" onclick="closeModal('wipe')">Cancel</button>
+          <button type="submit" class="btn" id="wipeBtn">Wipe history</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Group settings panel -->
+  <div id="groupSettings" class="hidden">
+    <div class="detail-topbar">
+      <button class="back-btn" onclick="closeSettings()">←</button>
+      <h3>Group settings</h3>
+    </div>
+    <div class="detail-body">
+      <div id="settingsLeaderBlock" class="hidden">
+        <div class="section-label">Group Details</div>
+        <div class="settings-row">
+          <div><div class="s-label">Group Name</div><div class="s-val" id="settingsName">—</div></div>
+          <button class="copy-btn" onclick="openRenameSheet()">Rename</button>
+        </div>
+        <div class="settings-row" style="margin-bottom:26px;">
+          <div><div class="s-label">Timezone</div><div class="s-val" id="settingsTz">—</div></div>
+          <button class="copy-btn" id="tzChangeBtn" onclick="openTimezoneSheet()">Change</button>
+        </div>
+      </div>
+      <div class="checklists-block hidden" id="reportsBlock">
+        <div class="section-label">Reports &amp; history</div>
+        <p class="mode-hint" style="margin-bottom:10px;">Export all saved checklist reports for the group. Each checklist’s History tab shows individual reports, & can be exported separately. Any previously wiped periods will not show.</p>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          <button class="copy-btn" onclick="exportReports('print', null, 'reportsMsg')">Print / PDF</button>
+          <button class="copy-btn" onclick="exportReports('csv', null, 'reportsMsg')">CSV</button>
+          <button class="copy-btn" onclick="exportReports('json', null, 'reportsMsg')">JSON</button>
+          <button class="copy-btn hidden" id="wipeAllBtn" onclick="openWipeSheet(null)">Wipe history</button>
+        </div>
+        <div class="form-msg" id="reportsMsg"></div>
+      </div>
+      <button class="leave-btn hidden" id="deleteGroupBtn" onclick="handleDeleteGroup()">Delete group</button>
+    </div>
+  </div>
+
   <!-- Group detail panel -->
   <div id="groupDetail" class="hidden">
     <div class="detail-topbar">
       <button class="back-btn" onclick="closeGroupDetail()">←</button>
       <h3 id="detailGroupName">Group</h3>
-      <button class="copy-btn hidden" id="renameIconBtn" onclick="openRenameSheet()">Rename</button>
+      <button class="copy-btn hidden" id="settingsBtn" onclick="openSettings()">Settings</button>
     </div>
     <div class="detail-body">
       <div id="detailLeaderBlock" class="hidden">
@@ -682,10 +796,7 @@
         <button class="link-btn hidden" id="annPastToggle" onclick="togglePastAnn()"></button>
       </div>
 
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;font-size:13.5px;color:var(--ink-soft);">
-        <span>Timezone: <span id="detailTz">—</span></span>
-        <button class="copy-btn hidden" id="tzChangeBtn" onclick="openTimezoneSheet()">Change</button>
-      </div>
+      <p style="margin:0 0 18px;font-size:13.5px;color:var(--ink-soft);">Timezone: <span id="detailTz">—</span></p>
 
       <div class="checklists-block">
         <div class="checklists-head">
@@ -702,7 +813,6 @@
       <div class="empty-state small hidden" id="detailMemberEmpty"><p>No members yet.</p></div>
 
       <button class="leave-btn hidden" id="leaveBtn" onclick="handleLeaveGroup()">Leave group</button>
-      <button class="leave-btn hidden" id="deleteGroupBtn" onclick="handleDeleteGroup()">Delete group</button>
     </div>
   </div>
 </div>
@@ -747,6 +857,8 @@
     clearMsg('signupMsg');
     const name = document.getElementById('signupName').value.trim();
     const email = document.getElementById('signupEmail').value.trim();
+    const email2 = document.getElementById('signupEmail2').value.trim();
+    if (email.toLowerCase() !== email2.toLowerCase()) { showMsg('signupMsg', 'The two email addresses don’t match — check for typos.', 'error'); return false; }
     const password = document.getElementById('signupPassword').value;
     const btn = document.getElementById('signupBtn');
     btn.disabled = true; btn.textContent = 'Creating account…';
@@ -889,8 +1001,8 @@
   }
 
   // ---------- Group modals ----------
-  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName', checklist: 'checklistTitle', timezone: 'tzSelect', announcement: 'annText' };
-  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save', checklist: 'Save', timezone: 'Save', announcement: 'Post' };
+  const MODAL_FIELDS = { create: 'createGroupName', join: 'joinCode', rename: 'renameGroupName', checklist: 'checklistTitle', timezone: 'tzSelect', announcement: 'annText', wipe: 'wipeConfirm' };
+  const MODAL_DEFAULT_BTN_TEXT = { create: 'Create group', join: 'Join', rename: 'Save', checklist: 'Save', timezone: 'Save', announcement: 'Post', wipe: 'Wipe history' };
 
   function openModal(which) {
     document.getElementById(which + 'Overlay').classList.remove('hidden');
@@ -995,9 +1107,13 @@
     document.getElementById('rerollNote').classList.toggle('hidden', role !== 'leader');
     document.getElementById('detailMemberBlock').classList.toggle('hidden', role === 'leader');
     document.getElementById('leaveBtn').classList.toggle('hidden', role === 'leader');
-    document.getElementById('renameIconBtn').classList.toggle('hidden', role !== 'leader');
+    document.getElementById('settingsBtn').classList.toggle('hidden', !canManage());
+    document.getElementById('settingsLeaderBlock').classList.toggle('hidden', role !== 'leader');
+    if (!canManage()) closeSettings();
     document.getElementById('deleteGroupBtn').classList.toggle('hidden', role !== 'leader');
     document.getElementById('newChecklistBtn').classList.toggle('hidden', !canManage());
+    document.getElementById('reportsBlock').classList.toggle('hidden', !canManage());
+    document.getElementById('wipeAllBtn').classList.toggle('hidden', role !== 'leader');
     renderAnnouncements();
   }
 
@@ -1122,8 +1238,18 @@
     }
   }
 
+  function openSettings() {
+    if (!openGroupId || !canManage()) return;
+    document.getElementById('settingsName').textContent = document.getElementById('detailGroupName').textContent;
+    renderTzRow();
+    clearMsg('reportsMsg');
+    document.getElementById('groupSettings').classList.remove('hidden');
+  }
+  function closeSettings() { document.getElementById('groupSettings').classList.add('hidden'); }
+
   function closeGroupDetail() {
     document.getElementById('groupDetail').classList.add('hidden');
+    document.getElementById('groupSettings').classList.add('hidden');
     if (unsubMembers) { unsubMembers(); unsubMembers = null; }
     if (unsubChecklists) { unsubChecklists(); unsubChecklists = null; }
     if (unsubAnn) { unsubAnn(); unsubAnn = null; }
@@ -1131,7 +1257,7 @@
     if (unsubProgress) { unsubProgress(); unsubProgress = null; }
     currentMembers = [];
     if (unsubShared) { unsubShared(); unsubShared = null; }
-    openGroupId = null; openGroupRole = null;
+    openGroupId = null; openGroupRole = null; histCache = {};
   }
 
   async function copyJoinCode() {
@@ -1205,6 +1331,7 @@
         }
       }
       document.getElementById('detailGroupName').textContent = newName;
+      document.getElementById('settingsName').textContent = newName;
       closeModal('rename');
     } catch (err) {
       console.error('Rename failed while ' + step, err);
@@ -1630,6 +1757,7 @@
   // Group timezone (set by leader)
   function renderTzRow(){
     document.getElementById('detailTz').textContent = groupTz().replace(/_/g, ' ');
+    document.getElementById('settingsTz').textContent = groupTz().replace(/_/g, ' ');
     document.getElementById('tzChangeBtn').classList.toggle('hidden', openGroupRole !== 'leader');
   }
   function openTimezoneSheet(){
@@ -1779,6 +1907,7 @@
     // The tab bar only matters if you can manage AND the checklist already exists;
     // a brand-new checklist has no progress yet, so it opens straight on Manage.
     document.getElementById('checklistTabs').classList.toggle('hidden', !(manage && id));
+    if (id) delete histCache[id];
 
     fillResetField(c);
     await bindProgress(c);
@@ -1861,11 +1990,15 @@
     const c = savedChecklist();
     document.getElementById('checklistManagePane').classList.toggle('hidden', tab !== 'manage');
     document.getElementById('checklistProgressPane').classList.toggle('hidden', tab !== 'progress');
+    document.getElementById('checklistHistoryPane').classList.toggle('hidden', tab !== 'history');
+    document.getElementById('tabHistory').classList.toggle('active', tab === 'history');
+    document.getElementById('histWipeBtn').classList.toggle('hidden', openGroupRole !== 'leader');
     document.getElementById('tabProgress').classList.toggle('active', tab === 'progress');
     document.getElementById('tabManage').classList.toggle('active', tab === 'manage');
     document.getElementById('checklistSheetTitle').textContent =
       tab === 'manage' ? (c ? 'Edit checklist' : 'New checklist') : (c ? (c.title || 'Checklist') : 'Checklist');
     document.getElementById('checklistBtn').classList.toggle('hidden', tab !== 'manage');
+    if (tab === 'history') renderHistoryPane();
     document.getElementById('checklistCancelBtn').textContent = tab === 'manage' ? 'Cancel' : 'Close';
     const arch = document.getElementById('manageArchiveBtn');
     arch.classList.toggle('hidden', !c);
@@ -2095,6 +2228,358 @@
     return false;
   }
 
+  // ---------- Phase 8: reports, export & history cleanup ----------
+  // History = every period doc under a checklist (+ its entries). Periods the clock
+  // says should exist but have no doc show as "no activity" (0%).
+  let histCache = {};
+  let wipeScope = null; // checklist id, or null = whole group
+  const entriesColFor = (c, key) => checklistRef(c.id).collection('periods').doc(key).collection('entries');
+  const pctText = r => r.pct == null ? '—' : r.pct + '%';
+  const whenFull = ts => (ts && ts.toDate) ? ts.toDate().toLocaleString([], { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' }) : '';
+
+  function keySortMs(key, d){
+    const m = /^(?:wk-|mo-)?(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+    if (m) return Date.UTC(+m[1], +m[2] - 1, +m[3]);
+    return (d && d.start && d.start.toMillis) ? d.start.toMillis() : 0;
+  }
+  function periodKeyLabel(key){
+    if (key === 'once') return 'All activity (no reset)';
+    const m = /^(wk-|mo-)?(\d{4})-(\d{2})-(\d{2})$/.exec(key);
+    if (!m) return key;
+    const d = new Date(Date.UTC(+m[2], +m[3] - 1, +m[4]));
+    const fmt = o => d.toLocaleDateString([], Object.assign({ timeZone: 'UTC' }, o));
+    const full = { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' };
+    if (m[1] === 'wk-') return 'Week of ' + fmt(full);
+    if (m[1] === 'mo-') return +m[4] === 1 ? fmt({ month: 'long', year: 'numeric' }) : 'From ' + fmt({ day: 'numeric', month: 'short', year: 'numeric' });
+    return fmt(full);
+  }
+  // Period keys the clock says should exist, newest first, back to when the checklist was made (max 400).
+  function genPeriods(c){
+    const r = resetOf(c), tz = groupTz();
+    const createdMs = (c.createdAt && c.createdAt.toMillis) ? c.createdAt.toMillis() : Date.now();
+    if (r.cycle === 'none') return [{ key: 'once', sortMs: createdMs }];
+    const out = [];
+    let p = periodInfo(c, new Date());
+    const floorMs = c.historyFloorMs || 0; // set by "Wipe history": periods before it are gone, empty ones included
+    for (let i = 0; i < 400; i++) {
+      const startInstant = wallToInstant(tz, p.startDay + r.hour * 3600000);
+      if (i > 0 && startInstant < floorMs) break;
+      out.push({ key: p.key, sortMs: p.startDay });
+      if (startInstant <= createdMs) break;
+      p = periodInfo(c, new Date(startInstant - 1));
+    }
+    return out;
+  }
+  async function loadHistory(c, force){
+    if (!force && histCache[c.id]) return histCache[c.id];
+    const snap = await checklistRef(c.id).collection('periods').get();
+    const map = {};
+    snap.docs.forEach(d => {
+      const data = d.data({ serverTimestamps: 'estimate' });
+      map[d.id] = { key: d.id, doc: data, entries: {}, sortMs: keySortMs(d.id, data) };
+    });
+    const recs = Object.values(map);
+    for (let i = 0; i < recs.length; i += 8) {
+      await Promise.all(recs.slice(i, i + 8).map(async rec => {
+        const es = await entriesColFor(c, rec.key).get();
+        es.forEach(d => { rec.entries[d.id] = d.data({ serverTimestamps: 'estimate' }); });
+      }));
+    }
+    genPeriods(c).forEach(g => {
+      if (!map[g.key]) { const rec = { key: g.key, doc: null, entries: {}, sortMs: g.sortMs }; map[g.key] = rec; recs.push(rec); }
+      else if (!map[g.key].sortMs) map[g.key].sortMs = g.sortMs;
+    });
+    recs.forEach(rec => {
+      rec.items = (rec.doc && rec.doc.itemsSnapshot) ? rec.doc.itemsSnapshot : (c.items || []);
+      rec.hasActivity = Object.keys(rec.entries).length > 0;
+    });
+    recs.sort((a, b) => b.sortMs - a.sortMs);
+    histCache[c.id] = recs;
+    return recs;
+  }
+  // When a period ended (real instant). Used to tell who wasn't a member yet.
+  function periodEndMs(c, rec){
+    const m = /^(wk-|mo-)?(\d{4})-(\d{2})-(\d{2})$/.exec(rec.key);
+    if (!m) return Infinity;
+    const r = resetOf(c), startDay = Date.UTC(+m[2], +m[3] - 1, +m[4]);
+    let end;
+    if (m[1] === 'mo-') { const y = +m[2], mo = +m[3] - 1; end = monthStartMs(mo === 11 ? y + 1 : y, (mo + 1) % 12, r.monthDay); }
+    else end = startDay + (m[1] === 'wk-' ? 7 : 1) * DAY_MS;
+    return wallToInstant(groupTz(), end + r.hour * 3600000);
+  }
+  // One period -> numbers + rows. Individual: people = leader + current members + anyone with an entry.
+  function reportFor(c, rec){
+    const items = rec.items || [];
+    const label = periodKeyLabel(rec.key);
+    if (modeOf(c) === 'shared') {
+      const checked = (rec.entries.shared && rec.entries.shared.checked) || {};
+      const rows = items.map(i => ({ text: i.text, who: checked[i.id] || null }));
+      const done = rows.filter(x => x.who).length;
+      return { label, shared: true, rows, done, total: items.length, pct: items.length ? Math.round(done / items.length * 100) : 0 };
+    }
+    const people = progressParticipants().map(p => ({ id: p.id, name: p.name || 'Team member', tag: p.tag }));
+    // People who joined after a period ended (and have no entry in it) aren't counted: shown as n/a, not 0%.
+    const endMs = periodEndMs(c, rec), joined = {};
+    currentMembers.forEach(m => { joined[m.id] = (m.joinedAt && m.joinedAt.toMillis) ? m.joinedAt.toMillis() : 0; });
+    Object.keys(rec.entries).forEach(uid => {
+      if (uid !== 'shared' && !people.some(p => p.id === uid)) people.push({ id: uid, name: rec.entries[uid].name || 'Former member', tag: 'former' });
+    });
+    people.forEach(p => {
+      const e = rec.entries[p.id];
+      const set = new Set(e ? (e.checkedIds || []) : []);
+      p.eligible = !!e || (joined[p.id] || 0) <= endMs;
+      p.items = items.map(i => ({ text: i.text, done: set.has(i.id) }));
+      p.doneCount = p.items.filter(i => i.done).length;
+    });
+    const active = people.filter(p => p.eligible);
+    const total = items.length * active.length;
+    const done = active.reduce((n, p) => n + p.doneCount, 0);
+    return { label, shared: false, people, done, total, pct: total ? Math.round(done / total * 100) : null };
+  }
+
+  async function renderHistoryPane(){
+    const c = savedChecklist();
+    if (!c || checklistTab !== 'history') return;
+    const id = c.id;
+    const list = document.getElementById('histList');
+    document.getElementById('histDetail').classList.add('hidden');
+    list.classList.remove('hidden');
+    list.innerHTML = '<p class="mode-hint">Loading history…</p>';
+    try {
+      const recs = await loadHistory(c);
+      if (editingChecklistId !== id || checklistTab !== 'history') return;
+      list.innerHTML = '';
+      const curKey = currentPeriodKey(c);
+      if (!recs.length) list.innerHTML = '<p class="mode-hint">No periods yet.</p>';
+      recs.forEach(rec => {
+        const r = reportFor(c, rec);
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'progress-row hist-row';
+        b.innerHTML = '<div class="top-line"><span class="pname"></span><span class="pcount"></span></div><div class="bar-track"><div class="bar-fill" style="width:' + (r.pct || 0) + '%"></div></div>';
+        b.querySelector('.pname').textContent = r.label + (rec.key === curKey ? ' · current' : '') + (rec.hasActivity ? '' : ' · no activity');
+        b.querySelector('.pcount').textContent = pctText(r);
+        b.onclick = () => showHistDetail(c, rec);
+        list.appendChild(b);
+      });
+    } catch (err) {
+      console.error('history load failed', err);
+      list.innerHTML = '';
+      const p = document.createElement('p');
+      p.className = 'mode-hint'; p.style.color = 'var(--danger)';
+      p.textContent = 'Couldn’t load history: ' + err.message;
+      list.appendChild(p);
+    }
+  }
+
+  function showHistDetail(c, rec){
+    const r = reportFor(c, rec);
+    document.getElementById('histList').classList.add('hidden');
+    const det = document.getElementById('histDetail');
+    det.classList.remove('hidden');
+    det.innerHTML = '';
+    const back = document.createElement('button');
+    back.type = 'button'; back.className = 'link-btn'; back.textContent = '← All periods';
+    back.onclick = () => { det.classList.add('hidden'); document.getElementById('histList').classList.remove('hidden'); };
+    det.appendChild(back);
+    const head = document.createElement('div');
+    head.style.margin = '4px 0 12px';
+    head.innerHTML = '<div style="font-weight:650;font-size:15px;"></div><div class="mode-hint"></div>';
+    head.firstChild.textContent = r.label;
+    head.lastChild.textContent = pctText(r) + ' · ' + r.done + ' of ' + r.total + ' done' + (rec.hasActivity ? '' : ' · no activity');
+    det.appendChild(head);
+    if (r.shared) {
+      const ul = document.createElement('ul'); ul.className = 'hd-list';
+      r.rows.forEach(x => {
+        const li = document.createElement('li');
+        li.className = x.who ? '' : 'no';
+        li.textContent = (x.who ? '✓ ' : '○ ') + x.text;
+        if (x.who) {
+          const by = document.createElement('div'); by.className = 'item-by';
+          by.textContent = (x.who.name || 'Someone') + (x.who.at ? ' · ' + whenFull(x.who.at) : '');
+          li.appendChild(by);
+        }
+        ul.appendChild(li);
+      });
+      det.appendChild(ul);
+    } else {
+      r.people.forEach(p => {
+        if (!p.eligible) {
+          const row = document.createElement('div'); row.className = 'hd-person';
+          row.style.cssText = 'display:flex;justify-content:space-between;gap:8px;color:var(--ink-soft);font-size:14px;';
+          row.innerHTML = '<span></span><span>Not yet a member</span>';
+          row.firstChild.textContent = p.name + (p.tag ? ' (' + p.tag + ')' : '');
+          det.appendChild(row); return;
+        }
+        const d = document.createElement('details'); d.className = 'hd-person';
+        const sum = document.createElement('summary');
+        const nm = document.createElement('span'); nm.textContent = p.name + (p.tag ? ' (' + p.tag + ')' : '');
+        const ct = document.createElement('span'); ct.style.color = 'var(--ink-soft)'; ct.textContent = p.doneCount + ' / ' + p.items.length;
+        sum.appendChild(nm); sum.appendChild(ct); d.appendChild(sum);
+        const ul = document.createElement('ul'); ul.className = 'hd-list';
+        p.items.forEach(i => { const li = document.createElement('li'); li.className = i.done ? '' : 'no'; li.textContent = (i.done ? '✓ ' : '○ ') + i.text; ul.appendChild(li); });
+        d.appendChild(ul);
+        det.appendChild(d);
+      });
+    }
+  }
+
+  // ----- Export -----
+  const slug = t => (String(t || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '')) || 'report';
+  function downloadFile(name, mime, text){
+    const url = URL.createObjectURL(new Blob([text], { type: mime }));
+    const a = document.createElement('a');
+    a.href = url; a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 3000);
+  }
+  function csvCell(v){
+    let t = v == null ? '' : String(v);
+    if (/^[=+\-@\t\r]/.test(t)) t = "'" + t; // stop spreadsheets running item text as a formula
+    return /[",\n\r]/.test(t) ? '"' + t.replace(/"/g, '""') + '"' : t;
+  }
+  function buildCsv(gname, data){
+    const rows = [['Group', 'Checklist', 'Type', 'Period key', 'Period', 'Item', 'Person', 'Done', 'Completed at']];
+    data.forEach(({ c, recs }) => {
+      const type = modeOf(c) === 'shared' ? 'Shared' : 'Individual';
+      recs.forEach(rec => {
+        const r = reportFor(c, rec);
+        const base = [gname, c.title || '', type, rec.key, r.label];
+        if (r.shared) r.rows.forEach(x => rows.push(base.concat([x.text, x.who ? (x.who.name || '') : '', x.who ? 'Yes' : 'No', (x.who && x.who.at && x.who.at.toDate) ? x.who.at.toDate().toISOString() : ''])));
+        else r.people.filter(p => p.eligible).forEach(p => p.items.forEach(i => rows.push(base.concat([i.text, p.name, i.done ? 'Yes' : 'No', '']))));
+      });
+    });
+    return rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  }
+  function plain(v){
+    if (v && typeof v.toDate === 'function') return v.toDate().toISOString();
+    if (Array.isArray(v)) return v.map(plain);
+    if (v && typeof v === 'object') { const o = {}; Object.keys(v).forEach(k => { o[k] = plain(v[k]); }); return o; }
+    return v;
+  }
+  // Raw copy: only periods that actually have a record in the database.
+  function buildJson(gname, data){
+    return {
+      exportedAt: new Date().toISOString(),
+      group: { id: openGroupId, name: gname, timezone: groupTz() },
+      checklists: data.map(({ c, recs }) => ({
+        id: c.id, title: c.title, mode: modeOf(c), archived: !!c.archived, reset: resetOf(c), items: c.items || [],
+        periods: recs.filter(rec => rec.doc || rec.hasActivity).map(rec => plain({
+          key: rec.key, start: rec.doc ? rec.doc.start : null,
+          titleSnapshot: rec.doc ? rec.doc.titleSnapshot : null, itemsSnapshot: rec.doc ? rec.doc.itemsSnapshot : null,
+          entries: rec.entries
+        }))
+      }))
+    };
+  }
+  function printReports(gname, data){
+    const esc = escapeHtml;
+    let h = '<h1>' + esc(gname) + ' — checklist reports</h1><p class="pr-sub">Exported ' + esc(new Date().toLocaleString()) + ' · Group timezone: ' + esc(groupTz()) + '</p>';
+    data.forEach(({ c, recs }) => {
+      h += '<h2>' + esc(c.title || 'Untitled') + ' (' + (modeOf(c) === 'shared' ? 'Shared' : 'Individual') + (c.archived ? ', archived' : '') + ')</h2>';
+      if (!recs.length) h += '<p>No periods yet.</p>';
+      recs.forEach(rec => {
+        const r = reportFor(c, rec);
+        h += '<div class="pr-p"><h3>' + esc(r.label) + ' — ' + pctText(r) + ' (' + r.done + '/' + r.total + ')</h3>';
+        if (!rec.hasActivity) h += '<p>No activity.</p>';
+        else if (r.shared) h += r.rows.map(x => '<p>' + (x.who ? '☑' : '☐') + ' ' + esc(x.text) + (x.who ? ' — ' + esc(x.who.name || 'Someone') + (x.who.at ? ' · ' + esc(whenFull(x.who.at)) : '') : '') + '</p>').join('');
+        else h += r.people.filter(p => p.eligible).map(p => {
+          const miss = p.items.filter(i => !i.done).map(i => i.text);
+          return '<p><strong>' + esc(p.name) + '</strong> (' + p.doneCount + '/' + p.items.length + ')' + (miss.length ? ' — not done: ' + esc(miss.join(', ')) : ' — all done') + '</p>';
+        }).join('');
+        h += '</div>';
+      });
+    });
+    document.getElementById('printArea').innerHTML = h;
+    document.body.classList.add('printing');
+    setTimeout(() => window.print(), 100);
+  }
+  window.addEventListener('afterprint', () => document.body.classList.remove('printing'));
+
+  // kind: 'print' | 'csv' | 'json'. scopeId: one checklist, or null for the whole group.
+  async function exportReports(kind, scopeId, msgId){
+    if (!canManage() || !openGroupId) return;
+    const list = scopeId ? currentChecklists.filter(c => c.id === scopeId) : currentChecklists.slice();
+    if (!list.length) { showMsg(msgId, 'No checklists to export yet.', 'error'); return; }
+    try {
+      const data = [];
+      for (let i = 0; i < list.length; i++) {
+        showMsg(msgId, 'Loading ' + (i + 1) + ' of ' + list.length + ': ' + (list[i].title || 'checklist') + '…', 'info');
+        data.push({ c: list[i], recs: await loadHistory(list[i], true) });
+      }
+      const gname = document.getElementById('detailGroupName').textContent || 'Group';
+      const base = slug(scopeId ? list[0].title : gname) + '-reports-' + new Date().toISOString().slice(0, 10);
+      if (kind === 'csv') downloadFile(base + '.csv', 'text/csv;charset=utf-8', '\uFEFF' + buildCsv(gname, data));
+      else if (kind === 'json') downloadFile(base + '.json', 'application/json', JSON.stringify(buildJson(gname, data), null, 2));
+      else printReports(gname, data);
+      clearMsg(msgId);
+    } catch (err) {
+      console.error('Export failed', err);
+      showMsg(msgId, 'Export failed: ' + err.message, 'error');
+    }
+  }
+
+  // ----- Wipe history (leader only) -----
+  function openWipeSheet(id){
+    if (openGroupRole !== 'leader') return;
+    wipeScope = id || null;
+    const c = id ? currentChecklists.find(x => x.id === id) : null;
+    document.getElementById('wipeScopeText').textContent = c
+      ? 'This deletes the past reports for “' + (c.title || 'Untitled') + '”.'
+      : 'This deletes the past reports for every checklist in this group, including archived ones.';
+    document.getElementById('wipeKeepN').value = '';
+    document.getElementById('wipeKeepUnit').value = 'weeks';
+    openModal('wipe');
+  }
+  async function handleWipe(e){
+    e.preventDefault();
+    clearMsg('wipeMsg');
+    if (openGroupRole !== 'leader' || !openGroupId) return false;
+    if (document.getElementById('wipeConfirm').value.trim().toUpperCase() !== 'WIPE') { showMsg('wipeMsg', 'Type WIPE to confirm.', 'error'); return false; }
+    const nRaw = document.getElementById('wipeKeepN').value.trim();
+    let cutoff = Infinity;
+    if (nRaw !== '') {
+      const n = +nRaw;
+      if (!(n >= 0)) { showMsg('wipeMsg', 'Enter a number of days or weeks, or leave it empty.', 'error'); return false; }
+      cutoff = Date.now() - n * (document.getElementById('wipeKeepUnit').value === 'weeks' ? 7 : 1) * DAY_MS;
+    }
+    const btn = document.getElementById('wipeBtn');
+    btn.disabled = true; btn.textContent = 'Wiping…';
+    let removed = 0;
+    try {
+      const lists = wipeScope ? currentChecklists.filter(c => c.id === wipeScope) : currentChecklists;
+      for (const c of lists) {
+        const curKey = currentPeriodKey(c);
+        const snap = await checklistRef(c.id).collection('periods').get();
+        for (const per of snap.docs) {
+          if (per.id === curKey) continue;
+          if (keySortMs(per.id, per.data()) >= cutoff) continue;
+          const ens = await per.ref.collection('entries').get();
+          const refs = ens.docs.map(d => d.ref).concat([per.ref]); // period doc last
+          for (let i = 0; i < refs.length; i += 300) {
+            const batch = db.batch();
+            refs.slice(i, i + 300).forEach(r => batch.delete(r));
+            await batch.commit();
+          }
+          removed++;
+          showMsg('wipeMsg', 'Deleted ' + removed + ' period' + (removed === 1 ? '' : 's') + '…', 'info');
+        }
+      }
+      // Move the checklist's history floor forward so empty periods before the cutoff stop being listed too.
+      const floor = isFinite(cutoff) ? cutoff : Date.now();
+      for (const c of lists) await checklistRef(c.id).update({ historyFloorMs: Math.max(floor, c.historyFloorMs || 0) });
+      histCache = {};
+      closeModal('wipe');
+      if (!document.getElementById('checklistOverlay').classList.contains('hidden') && checklistTab === 'history') renderHistoryPane();
+      alert('History cleared' + (removed ? ' — ' + removed + ' recorded period' + (removed === 1 ? '' : 's') + ' deleted.' : ' (no recorded periods needed deleting).'));
+    } catch (err) {
+      console.error('Wipe failed', err);
+      showMsg('wipeMsg', 'Stopped after ' + removed + ' period(s): ' + err.message, 'error');
+      btn.disabled = false; btn.textContent = 'Wipe history';
+    }
+    return false;
+  }
+
   async function handleDeleteGroup() {
     if (!openGroupId) return;
     if (!confirm('Delete this group? This removes it for every member and can\'t be undone.')) return;
@@ -2148,6 +2633,72 @@
     }
   }
 
+  // ---------- Forgot password & email verification ----------
+  async function handleForgotPassword() {
+    if (!isConfigured) { showMsg('loginMsg', 'Connect Firebase first — see SETUP.md.', 'error'); return; }
+    clearMsg('loginMsg');
+    const email = document.getElementById('loginEmail').value.trim();
+    if (!email) { showMsg('loginMsg', 'Enter your email above first, then tap “Forgot password?”.', 'error'); return; }
+    try {
+      await auth.sendPasswordResetEmail(email);
+    } catch (err) {
+      if (err.code === 'auth/invalid-email' || err.code === 'auth/too-many-requests') { showMsg('loginMsg', friendlyAuthError(err), 'error'); return; }
+      console.warn('password reset', err); // anything else: stay neutral, don't reveal whether the account exists
+    }
+    showMsg('loginMsg', 'If an account exists for that email, a reset link is on its way. Check your spam folder too.', 'info');
+  }
+
+  function refreshVerifyUI(user) {
+    const ok = !!(user && user.emailVerified);
+    document.getElementById('verifyCard').classList.toggle('hidden', !user || ok);
+    document.getElementById('acctVerified').textContent = ok ? 'Verified' : 'Not verified';
+  }
+  function startVerifyCooldown() {
+    const btn = document.getElementById('verifySendBtn');
+    let n = 60;
+    btn.disabled = true; btn.textContent = 'Resend in 60s';
+    const t = setInterval(() => {
+      n--;
+      if (n <= 0) { clearInterval(t); btn.disabled = false; btn.textContent = 'Resend verification email'; }
+      else btn.textContent = 'Resend in ' + n + 's';
+    }, 1000);
+  }
+  async function handleSendVerification() {
+    const u = auth.currentUser;
+    if (!u) return;
+    clearMsg('verifyMsg');
+    const btn = document.getElementById('verifySendBtn');
+    btn.disabled = true;
+    try {
+      await u.sendEmailVerification();
+      showMsg('verifyMsg', 'Sent to ' + u.email + '. Open the link in that email (check spam), then tap “I’ve verified”.', 'info');
+      startVerifyCooldown();
+    } catch (err) {
+      showMsg('verifyMsg', friendlyAuthError(err), 'error');
+      btn.disabled = false;
+    }
+  }
+  async function handleCheckVerified() {
+    const u = auth.currentUser;
+    if (!u) return;
+    clearMsg('verifyMsg');
+    try {
+      await u.reload();
+      refreshVerifyUI(auth.currentUser);
+      if (auth.currentUser.emailVerified) alert('Email verified — thanks!');
+      else showMsg('verifyMsg', 'Not verified yet — open the link in the email first.', 'error');
+    } catch (err) {
+      showMsg('verifyMsg', err.message, 'error');
+    }
+  }
+  // Coming back from the email app: check quietly.
+  document.addEventListener('visibilitychange', () => {
+    const u = isConfigured && auth.currentUser;
+    if (document.visibilityState === 'visible' && u && !u.emailVerified) {
+      u.reload().then(() => refreshVerifyUI(auth.currentUser)).catch(() => {});
+    }
+  });
+
   // ---------- Auth state ----------
   if (isConfigured) {
     auth.onAuthStateChanged(async (user) => {
@@ -2159,6 +2710,7 @@
         document.getElementById('whoami').textContent = user.displayName || user.email;
         document.getElementById('acctName').textContent = user.displayName || '—';
         document.getElementById('acctEmail').textContent = user.email || '—';
+        refreshVerifyUI(user);
         // reset forms/buttons for next time someone logs out
         document.getElementById('loginBtn').disabled = false;
         document.getElementById('loginBtn').textContent = 'Log in';
